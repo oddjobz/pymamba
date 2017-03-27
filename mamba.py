@@ -20,6 +20,11 @@ def debug(self, msg):
     name = _getframe(1).f_code.co_name
     print("{}: #{} - {}".format(name, line, msg))
 
+def anonymous(text):
+    scope = {}
+    exec("def func" + text, scope)
+    return scope['func']
+
 ##############################################################################
 #
 #   CLASS :: Index
@@ -31,8 +36,8 @@ class Index(object):
 
     def __init__(self, env, index):
         self._env = env
-        print("Index=", index)
-        self._func = index['func']
+        print("Index=", index['func'])
+        self._func = anonymous(index['func'])
         self._name = index['name']
         self._conf = index['config']
         self.init_index()
@@ -48,10 +53,10 @@ class Index(object):
 
     def put(self, txn, key, record):
         """put a new record in the index"""
-        if isinstance(self._func, str):
-            val =  record.get(self._func, '')
-        else:
-            val = self._func(record)
+        #if isinstance(self._func, str):
+        #    val =  record.get(self._func, '')
+        #else:
+        val = self._func(record)
         return txn.put(val.encode(), key.encode(), db=self._db)
 
     def delete(self, txn, key, record):
@@ -312,7 +317,7 @@ db = Database('demodb')
 print(db.schema()._schema)
 print(db.create_table('my_test'))
 print(db.schema()._schema)
-print(db.create_index('my_test', name='by_origin', field='origin', duplicates=True))
+print(db.create_index('my_test', name='by_origin', field="(record):return record.get('origin','')", duplicates=True))
 print(db.schema()._schema)
 print("===")
 db1 = Database('demodb')
