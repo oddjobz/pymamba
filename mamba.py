@@ -7,6 +7,7 @@ from time import time
 from sys import _getframe
 from random import random
 from uuid import uuid1 as UUID
+from pprint import PrettyPrinter
 
 ##############################################################################
 #
@@ -36,7 +37,6 @@ class Index(object):
 
     def __init__(self, env, index):
         self._env = env
-        print("Index=", index['func'])
         self._func = anonymous(index['func'])
         self._name = index['name']
         self._conf = index['config']
@@ -53,11 +53,7 @@ class Index(object):
 
     def put(self, txn, key, record):
         """put a new record in the index"""
-        #if isinstance(self._func, str):
-        #    val =  record.get(self._func, '')
-        #else:
-        val = self._func(record)
-        return txn.put(val.encode(), key.encode(), db=self._db)
+        return txn.put(self._func(record).encode(), key.encode(), db=self._db)
 
     def delete(self, txn, key, record):
         """delete a record from the index"""
@@ -91,7 +87,6 @@ class Table(object):
         self._env = env
         self._name = name
         self._indexes = indexes
-        debug(self, '@@ {}'.format(indexes))
         self._init_autoinc()
         self._init_indexes()
 
@@ -204,7 +199,40 @@ class Table(object):
         self._index_array[index['name']] = Index(self._env, index)
         return index
 
-    def iterate(self, callback):
+    def iterate_callback(self, data):
+        if data:
+            self.values.append(data)
+            for k,v in data.items():
+                kl = len(k)
+                vl = len(str(v))
+                mx = max(kl, vl)
+                if ((k in self.lengths) and (mx > self.lengths[k])) or (k not in self.lengths):
+                    self.lengths[k] = mx
+            return
+        #
+        separator = ''
+        fmt = ''
+        data = {}
+        #
+        for k,v in self.lengths.items():
+            separator += '+'+'-'*(v+2)
+        for k,v in self.lengths.items():
+            fmt += '| {'+k+':'+str(v)+'} '
+            data[k] = k
+        separator += '+'
+        fmt += '|'
+        print(separator)
+        print(fmt.format(**data))
+        print(separator)
+        for item in self.values:
+            print(fmt.format(**item))
+        print(separator)
+
+    def iterate(self, callback=None):
+        self.values = []
+        self.lengths = {}
+        count = 0
+        if not callback: callback = self.iterate_callback
         with self._env.begin() as txn:
             with Cursor(self._db, txn) as cursor:
                 if not cursor.first(): return
@@ -213,6 +241,9 @@ class Table(object):
                     record = loads(bytes(record))
                     callback(record)
                     if not cursor.next(): break
+                    count += 1
+                    if count>10: break
+        callback(None)
 
 ##############################################################################
 #
@@ -256,7 +287,6 @@ class Schema(object):
     def open(self):
         for table in self._schema['tables']:
             indexes = self._schema['tables'][table]['indexes']
-            print("+", table, "+", indexes, "+")
             self._tables[table] = self._db.open(table, indexes)
 
 ##############################################################################
@@ -290,7 +320,6 @@ class Database(object):
         self._env = None
 
     def open(self, name, indexes):
-        print("~~",indexes)
         self._tables[name] = Table(self._env, name, indexes)
         return self._tables[name]
 
@@ -313,19 +342,77 @@ class Database(object):
         }
         return self._schema.create_index(table, name, index)
 
+import itertools
+
+class MDB:
+    """class for chaining operatins together"""
+    def __init__(self, database):
+        self._db = Database(database)
+        self._pipe = []
+
+    def use(self, table):
+        self._table = self._db.use(table)
+        return self
+
+    def scan(self):
+        def seq(item=None):
+            with self._db._env.begin() as txn:
+                with Cursor(self._table._db, txn) as cursor:
+                    if not cursor.first(): return
+                    while True:
+                        key,val = cursor.item()
+                        yield (key, loads(bytes(val)))
+                        if not cursor.next(): return
+        
+        self._pipe.append(seq)
+        return self
+
+    def pp(self):
+        def pp(item=None):
+            if item[1]['index'] == 5: return
+            yield item
+        self._pipe.append(pp)
+        return self
+
+    def filter(self, expression):
+        def fil(item=None):
+            if not expression(item): return
+            yield item
+        self._pipe.append(fil)
+        return self
+
+    def print(self, callback=print):
+        def pri(item=None):
+            callback(item)
+        self._pipe.append(pri)
+        self.run()
+
+    def run(self):
+        def recurse(i, item):
+            for obj in self._pipe[i](item):
+                if (i+2)<len(self._pipe):
+                    recurse(i+1, obj)
+                else:
+                    self._pipe[i+1](obj)
+        recurse(0, None)
+
+
+pp = PrettyPrinter(indent=1, width=120)
 db = Database('demodb')
-print(db.schema()._schema)
 print(db.create_table('my_test'))
-print(db.schema()._schema)
 print(db.create_index('my_test', name='by_origin', field="(record):return record.get('origin','')", duplicates=True))
-print(db.schema()._schema)
-print("===")
-db1 = Database('demodb')
-print(db.schema()._schema)
-table = db1.use('my_test')
+pp.pprint(db.schema()._schema)
+table = db.use('my_test')
 for i in range(10):
-    table.put({'index':i, 'origin': 'long string'+str(i)})
-recover = db.use('my_test')
-def callback(record):
-    print(record)
-recover.iterate(callback)
+    table.put({'index':i, 'origin': 'long string '+str(i)})
+db.use('my_test').iterate()
+
+def myfilter(item):
+    k, v = item
+    return v['index']>2 and v['index']<6
+
+def myp(item):
+    print(item[0])
+
+MDB('demodb').use('my_test').scan().filter(myfilter).print(myp)
+
