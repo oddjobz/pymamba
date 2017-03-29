@@ -8,6 +8,7 @@ from sys import _getframe
 from random import random
 from uuid import uuid1 as UUID
 from pprint import PrettyPrinter
+from pymongo import MongoClient
 
 ##############################################################################
 #
@@ -79,7 +80,7 @@ class Index(object):
 ##############################################################################
 class Table(object):
 
-    _debug = True
+    _debug = False
     _index_array = {}
 
     def __init__(self, env, name, indexes):
@@ -125,12 +126,12 @@ class Table(object):
         """put a new record into the table"""
         def put_actual():
             key = str(UUID())
+            record['_id'] = key
             txn.put(key.encode(), dumps(record).encode(), db=self._db, append=True)
             for _, index in self._index_array.items():
                 index.put(txn, key, record)
-            record['_id'] = key
-        if txn: put_actual()
-        with self._env.begin(write=True) as txn: put_actual()
+        if txn: return put_actual()
+        with self._env.begin(write=True) as txn: return put_actual()
 
     def put_raw(self, key, record):
         with self._env.begin(write=True) as txn:
@@ -350,6 +351,21 @@ class MDB:
         self._db = Database(database)
         self._pipe = []
 
+    def create_table(self, table_name):
+        """create a new table"""
+        self._db.create_table(table_name)
+
+    def mongo(self, url, database, collection):
+        """import from remote source,for now use mongo"""
+        if not url: url='localhost'
+        self.mongo = MongoClient('mongodb://'+url)
+        collection = self.mongo[database][collection]
+        def mongo(item=None):
+            for document in collection.find():
+                yield document
+        self._pipe.append(mongo)
+        return self
+
     def use(self, table):
         self._table = self._db.use(table)
         return self
@@ -381,38 +397,82 @@ class MDB:
         self._pipe.append(fil)
         return self
 
+    def limit(self, max):
+        self.limit_count = 0
+        def limit(item=None):
+            self.limit_count += 1
+            if self.limit_count > max: return
+            yield item
+        self._pipe.append(limit)
+        return self
+
     def print(self, callback=print):
         def pri(item=None):
             callback(item)
         self._pipe.append(pri)
         self.run()
 
+    def put(self):
+        self.total = 0
+        def put(item=None):
+            self.total += 1
+            self._table.put(item, txn)
+            return self.total
+        self._pipe.append(put)
+        beg = time()
+        with self._db._env.begin(write=True) as txn:
+            cnt = self.run()
+        end = time()
+        elapsed = end-beg
+        rate = int(cnt/elapsed)
+        print('Put "{}" in "{:0.3f}" seconds, rate = {}/second'.format(cnt, elapsed, rate))
+
+    def count(self):
+        self.total = 0
+        def count(item=None):
+            self.total += 1
+            return self.total
+        self._pipe.append(count)
+        beg = time()
+        cnt = self.run()
+        end = time()
+        elapsed = end-beg
+        rate = int(cnt/elapsed)
+        print('Counted "{}" in "{:0.3f}" seconds, rate = {}/second'.format(cnt, elapsed, rate))
+
     def run(self):
         def recurse(i, item):
+            result = 0
             for obj in self._pipe[i](item):
                 if (i+2)<len(self._pipe):
-                    recurse(i+1, obj)
+                    result = recurse(i+1, obj)
                 else:
-                    self._pipe[i+1](obj)
-        recurse(0, None)
+                    result = self._pipe[i+1](obj)
+            return result
 
+        return recurse(0, None)
 
-pp = PrettyPrinter(indent=1, width=120)
-db = Database('demodb')
-print(db.create_table('my_test'))
-print(db.create_index('my_test', name='by_origin', field="(record):return record.get('origin','')", duplicates=True))
-pp.pprint(db.schema()._schema)
-table = db.use('my_test')
-for i in range(10):
-    table.put({'index':i, 'origin': 'long string '+str(i)})
-db.use('my_test').iterate()
+#pp = PrettyPrinter(indent=1, width=120)
+#db = Database('demodb')
+#db.create_table('my_test')
+#db.create_index('my_test', name='by_origin', field="(record):return record.get('origin','')", duplicates=True)
+#pp.pprint(db.schema()._schema)
+#table = db.use('my_test')
+#for i in range(10):
+#    table.put({'index':i, 'origin': 'long string '+str(i)})
+#db.use('my_test').iterate()
 
-def myfilter(item):
-    k, v = item
-    return v['index']>2 and v['index']<6
+#def myfilter(item):
+#    k, v = item
+#    return v['index']>2 and v['index']<6
 
-def myp(item):
-    print(item[0])
+#def myp(item):
+#    print(item[0])
 
-MDB('demodb').use('my_test').scan().filter(myfilter).print(myp)
-
+#MDB('demodb').use('my_test').scan().filter(myfilter).print(myp)
+#MDB('demodb').use('my_test').mongo('localhost','demodb','testtable').count()
+#MDB('demodb').create_table('testtable')
+#MDB('demodb').use('testtable').mongo('localhost','demodb','testtable').put()
+#MDB('demodb').use('testtable').scan().count()
+#MDB('demodb').use('testtable').scan().limit(10).print()
+MDB('demodb').use('testtable').scan().filter(lambda doc: doc[1]['sid'] in [10,11,12]).print(lambda doc: print(doc[1]))
