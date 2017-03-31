@@ -1,14 +1,9 @@
 #!/usr/bin/python3
 
-from unittest import TestCase
 from lmdb import Cursor, Environment
 from ujson import loads, dumps
-from time import time
 from sys import _getframe
-from random import random
 from uuid import uuid1 as UUID
-from pprint import PrettyPrinter
-from pymongo import MongoClient
 
 ##############################################################################
 #
@@ -248,6 +243,59 @@ class Table(object):
 
 ##############################################################################
 #
+#   CLASS :: Database
+#
+##############################################################################
+class Database(object):
+
+    _tables = {}
+    _config = {
+        'map_size': 1024*1024*1024 * 2,
+        'subdir': True,
+        'metasync': False,
+        'sync': True,
+        'max_dbs': 12,
+        'writemap': True
+    }
+    def __init__(self, *args, **argv):
+        _config = dict(self._config, **argv.get('env', {}))
+        self._env = Environment(args[0], **_config)
+        self._schema = Schema(self)
+        self._schema.open()
+
+    def __del__(self):
+        self.close()
+
+    def close(self):
+        if not self._env: return
+        self._env.close()
+        self._env = None
+
+    def open(self, name, indexes):
+        self._tables[name] = Table(self._env, name, indexes)
+        return self._tables[name]
+
+    def use(self, name):
+        return self._tables[name]
+
+    def schema(self):
+        """return the schema for the current db"""
+        return self._schema
+
+    def create_table(self, name):
+        return self._schema.create_table(name)
+
+    def create_index(self, table, name, field, duplicates):
+        """create a new index"""
+        index = {
+            'name': name,
+            'func': field,
+            'config': {'dupsort': duplicates}
+        }
+        return self._schema.create_index(table, name, index)
+
+##############################################################################
+#
 #   CLASS :: Schema
 #
 ##############################################################################
@@ -290,189 +338,22 @@ class Schema(object):
             indexes = self._schema['tables'][table]['indexes']
             self._tables[table] = self._db.open(table, indexes)
 
-##############################################################################
-#
-#   CLASS :: Database
-#
-##############################################################################
-class Database(object):
+    def table(self, table):
+        return self._tables[table]
 
-    _tables = {}
-    _config = {
-        'map_size': 1024*1024*1024 * 2,
-        'subdir': True,
-        'metasync': False,
-        'sync': False,
-        'max_dbs': 12,
-        'writemap': True
-    }
-    def __init__(self, *args, **argv):
-        _config = dict(self._config, **argv.get('env', {}))
-        self._env = Environment(args[0], **_config)
-        self._schema = Schema(self)
-        self._schema.open()
+if __name__ == "main":
+    pass
+    # run test cases here ...
 
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        if not self._env: return
-        self._env.close()
-        self._env = None
-
-    def open(self, name, indexes):
-        self._tables[name] = Table(self._env, name, indexes)
-        return self._tables[name]
-
-    def use(self, name):
-        return self._tables[name]
-
-    def schema(self):
-        """return the schema for the current db"""
-        return self._schema
-
-    def create_table(self, name):
-        return self._schema.create_table(name)
-
-    def create_index(self, table, name, field, duplicates):
-        """create a new index"""
-        index = {
-            'name': name,
-            'func': field,
-            'config': {'dupsort': duplicates}
-        }
-        return self._schema.create_index(table, name, index)
-
-import itertools
-
-class MDB:
-    """class for chaining operatins together"""
-    def __init__(self, database):
-        self._db = Database(database)
-        self._pipe = []
-
-    def create_table(self, table_name):
-        """create a new table"""
-        self._db.create_table(table_name)
-
-    def mongo(self, url, database, collection):
-        """import from remote source,for now use mongo"""
-        if not url: url='localhost'
-        self.mongo = MongoClient('mongodb://'+url)
-        collection = self.mongo[database][collection]
-        def mongo(item=None):
-            for document in collection.find():
-                yield document
-        self._pipe.append(mongo)
-        return self
-
-    def use(self, table):
-        self._table = self._db.use(table)
-        return self
-
-    def scan(self):
-        def seq(item=None):
-            with self._db._env.begin() as txn:
-                with Cursor(self._table._db, txn) as cursor:
-                    if not cursor.first(): return
-                    while True:
-                        key,val = cursor.item()
-                        yield (key, loads(bytes(val)))
-                        if not cursor.next(): return
-        
-        self._pipe.append(seq)
-        return self
-
-    def pp(self):
-        def pp(item=None):
-            if item[1]['index'] == 5: return
-            yield item
-        self._pipe.append(pp)
-        return self
-
-    def filter(self, expression):
-        def fil(item=None):
-            if not expression(item): return
-            yield item
-        self._pipe.append(fil)
-        return self
-
-    def limit(self, max):
-        self.limit_count = 0
-        def limit(item=None):
-            self.limit_count += 1
-            if self.limit_count > max: return
-            yield item
-        self._pipe.append(limit)
-        return self
-
-    def print(self, callback=print):
-        def pri(item=None):
-            callback(item)
-        self._pipe.append(pri)
-        self.run()
-
-    def put(self):
-        self.total = 0
-        def put(item=None):
-            self.total += 1
-            self._table.put(item, txn)
-            return self.total
-        self._pipe.append(put)
-        beg = time()
-        with self._db._env.begin(write=True) as txn:
-            cnt = self.run()
-        end = time()
-        elapsed = end-beg
-        rate = int(cnt/elapsed)
-        print('Put "{}" in "{:0.3f}" seconds, rate = {}/second'.format(cnt, elapsed, rate))
-
-    def count(self):
-        self.total = 0
-        def count(item=None):
-            self.total += 1
-            return self.total
-        self._pipe.append(count)
-        beg = time()
-        cnt = self.run()
-        end = time()
-        elapsed = end-beg
-        rate = int(cnt/elapsed)
-        print('Counted "{}" in "{:0.3f}" seconds, rate = {}/second'.format(cnt, elapsed, rate))
-
-    def run(self):
-        def recurse(i, item):
-            result = 0
-            for obj in self._pipe[i](item):
-                if (i+2)<len(self._pipe):
-                    result = recurse(i+1, obj)
-                else:
-                    result = self._pipe[i+1](obj)
-            return result
-
-        return recurse(0, None)
-
-#pp = PrettyPrinter(indent=1, width=120)
+#db = Database('Sessions')
+#schema = Schema(db)
+#schema.create_table('sessions')
+#schema.create_table('origins')
+#schema.open()
+#print(schema._tables)
+#origins = schema._tables['origins']
+#print(origins)
+#origins.iterate()
 #db = Database('demodb')
 #db.create_table('my_test')
 #db.create_index('my_test', name='by_origin', field="(record):return record.get('origin','')", duplicates=True)
-#pp.pprint(db.schema()._schema)
-#table = db.use('my_test')
-#for i in range(10):
-#    table.put({'index':i, 'origin': 'long string '+str(i)})
-#db.use('my_test').iterate()
-
-#def myfilter(item):
-#    k, v = item
-#    return v['index']>2 and v['index']<6
-
-#def myp(item):
-#    print(item[0])
-
-#MDB('demodb').use('my_test').scan().filter(myfilter).print(myp)
-#MDB('demodb').use('my_test').mongo('localhost','demodb','testtable').count()
-#MDB('demodb').create_table('testtable')
-#MDB('demodb').use('testtable').mongo('localhost','demodb','testtable').put()
-#MDB('demodb').use('testtable').scan().count()
-#MDB('demodb').use('testtable').scan().limit(10).print()
-MDB('demodb').use('testtable').scan().filter(lambda doc: doc[1]['sid'] in [10,11,12]).print(lambda doc: print(doc[1]))
