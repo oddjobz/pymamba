@@ -3,3 +3,8 @@ demodb
 test.js
 node_modules
 Sessions
+.idea
+/doc
+old.py
+/unit-db
+
