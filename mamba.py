@@ -56,16 +56,19 @@ def anonymous(text):
 ##############################################################################
 #   CLASS - Exceptions
 ##############################################################################
-class DBTableExists(Exception):
+class lmdb_TableExists(Exception):
     pass
 
-class DBIndexExists(Exception):
+class lmdb_IndexExists(Exception):
     pass
 
-class DBTableMissing(Exception):
+class lmdb_TableMissing(Exception):
     pass
 
-class DBIndexMissing(Exception):
+class lmdb_IndexMissing(Exception):
+    pass
+
+class lmdb_NotFound(Exception):
     pass
 ##############################################################################
 #   CLASS - Index
@@ -73,16 +76,25 @@ class DBIndexMissing(Exception):
 class Index(object):
 
     _debug = False
+    _str_tpl = '(k): return str(k["{}"]).encode()'
+    _int_tpl = '(k): return k["{}"].to_bytes(8,"big",signed=False)'
 
     def __init__(self, env, name, func, conf):
         self._env = env
         self._name = name
-        self._func = anonymous(func) if func and func[0]=='!' else func
         self._conf = conf
+        self._conf['key'] = self._conf['key'].encode()
+        self._integer = conf.get('integerkey', False)
+        if func[0] == '!':
+            self._func = anonymous(func[1:])
+        else:
+            fmt = self._int_tpl if self._integer else self._str_tpl
+            self._func = anonymous(fmt.format(func))
         self._db = self._env.open_db(**self._conf)
 
     def reindex(self):
         """reindex this index"""
+        pass
 
     def drop(self, txn):
         """drop a database index"""
@@ -90,15 +102,15 @@ class Index(object):
 
     def put(self, txn, key, record):
         """put a new record in the index"""
-        return txn.put(self._func(record).encode(), key.encode(), db=self._db)
+        return txn.put(self._func(record), key.encode(), db=self._db)
 
     def delete(self, txn, key, record):
         """delete a record from the index"""
-        return txn.delete(self._func(record).encode(), key, db=self._db)
+        return txn.delete(self._func(record), key, db=self._db)
 
     def get(self, txn, record):
         """read a record based on the primary key"""
-        return txn.get(self._func(record).encode(), db=self._db)
+        return txn.get(self._func(record), db=self._db)
 
     def cursor(self, txn):
         """return a cursor into the index"""
@@ -106,7 +118,6 @@ class Index(object):
 
     def count(self, txn):
         """return the number of items present in the index"""
-        print(">", txn.stat(self._db).get('entries', 0))
         return txn.stat(self._db).get('entries', 0)
 
 ##############################################################################
@@ -115,43 +126,41 @@ class Index(object):
 class Table(object):
 
     _debug = False
+    _indexes = {}
 
-    def __init__(self, env, name=None, indexes=None):
+    def __init__(self, env, name=None):
         self._env = env
         self._name = name
-        self._indexes = indexes
+        self._indexes = {}
         self._db = self._env.open_db(name.encode())
+        for index in self.indexes:
+            key = ''.join(['@', self._index_name(index)]).encode()
+            with self._env.begin() as txn:
+                doc = loads(bytes(txn.get(key)))
+                self._indexes[index] = Index(self._env, index, doc['func'], doc['conf'])
 
     def _index_name(self, name):
         return '_{}_{}'.format(self._name, name)
 
-    def _index(self, name):
-        """
-        table - public method to get a handle for a table
-        """
-        #return Table(self._env, name, {})
-
-
     def count_index(self, name):
-        index = self._index(name)
+        index = self._indexes[name]
         with self._env.begin() as txn:
             return index.count(txn)
 
-    def create_index(self, name, func, duplicates):
+    def create_index(self, name, func, duplicates=False, integer=False):
         conf = {
-            'key': self._index_name(name).encode(),
+            'key': self._index_name(name),
+            'integerkey': integer,
+            'integerdup': duplicates,
             'dupsort': duplicates,
-            'create': True
+            'create': True,
         }
-        index = Index(self._env, name, func, conf)
-        if not index:
-            return False
+        self._indexes[name] = Index(self._env, name, func, conf)
         with self._env.begin(write=True) as txn:
-            txn.put(
-                ''.join(['@', self._index_name(name)]).encode(),
-                dumps(conf).encode()
-            )
-        index.reindex()
+            key = ''.join(['@', self._index_name(name)]).encode()
+            val = dumps({'conf': conf, 'func': func}).encode()
+            txn.put(key, val)
+            self._indexes[name].reindex()
 
     def delete_index(self, name):
         db = self._env.open_db(self._index_name(name).encode())
@@ -159,48 +168,73 @@ class Table(object):
             txn.drop(db, True)
             txn.delete(''.join(['@', self._index_name(name)]).encode())
 
-    def append(self, data):
+    def append(self, doc):
         key = str(UUID())
-        data['_id'] = key
+        doc['_id'] = key
         with self._env.begin(write=True) as txn:
-            txn.put(key.encode(), dumps(data).encode(), db=self._db, append=True)
+            txn.put(key.encode(), dumps(doc).encode(), db=self._db, append=True)
+            for name in self._indexes:
+                self._indexes[name].put(txn, key, doc)
 
-#            for _, index in self._index_array.items():
-#                index.put(txn, key, record)
-#        if txn: return put_actual()
-#        with self._env.begin(write=True) as txn: return put_actual()
+    def delete(self, ids):
+        with self._env.begin(write=True) as txn:
+            for _id in ids:
+                key = _id.encode()
+                doc = loads(bytes(txn.get(key, db=self._db)))
+                txn.delete(key, db=self._db)
+                for name in self._indexes:
+                    self._indexes[name].delete(txn, key, doc)
 
-    def find(self, max=None):
+    #def search(self, spec):
+    #    results = []
+    #    with self._env.begin() as txn:
+    #        for idx, key in spec.items():
+    #            if idx == '_id':
+    #                results.append(key)
+    #                break
+    #            if idx not in self._indexes: raise lmdb_IndexMissing(idx)
+    #            with self._indexes[idx].cursor(txn) as cursor:
+    #                if cursor.set_range(index_name.encode()):
+    #                    while True:
+    #                        name = cursor.key().decode()
+    #                        if not name.startswith(index_name) or not cursor.next():
+    #                            break
+    #                        results.append(name[pos:])
+
+
+    #        print(idx,key)
+    #    return {}
+
+    def find(self, index_name=None, max=None):
         """
         find - public method to return records from this table
         """
         results = []
         with self._env.begin() as txn:
-            with Cursor(self._db, txn) as cursor:
-                if not cursor.first(): return
-                count = 0
-                while True:
-                    key, doc = cursor.item()
-                    doc = loads(bytes(doc))
-                    results.append(doc)
-                    count += 1
-                    if not cursor.next() or (max and count>=max): break
-        return results
+            if not index_name:
+                with Cursor(self._db, txn) as cursor:
+                    if not cursor.first(): return
+                    count = 0
+                    while True:
+                        doc = cursor.value()
+                        results.append(loads(bytes(doc)))
+                        count += 1
+                        if not cursor.next() or (max and count>=max): break
+            else:
+                if index_name not in self._indexes:
+                    raise lmdb_IndexMissing(index_name)
+                index = self._indexes[index_name]
+                with index.cursor(txn) as cursor:
+                    if not cursor.first(): return
+                    count = 0
+                    while True:
+                        doc = cursor.value()
+                        doc = loads(bytes(txn.get(doc, db=self._db)))
+                        results.append(doc)
+                        count += 1
+                        if not cursor.next() or (max and count>=max): break
 
-    def iterate(self, max=None, callback=print):
-        """
-        iterate - public method to iterate through a recordset
-        """
-        with self._env.begin() as txn:
-            with Cursor(self._db, txn) as cursor:
-                if not cursor.first(): return
-                count = 0
-                while True:
-                    key, record = cursor.item()
-                    record = loads(bytes(record))
-                    callback(record)
-                    count += 1
-                    if not cursor.next() or (max and count>=max): break
+        return results
 
     @property
     def indexes(self):
@@ -236,7 +270,7 @@ class Database(object):
         'subdir': True,
         'metasync': False,
         'sync': True,
-        'max_dbs': 12,
+        'max_dbs': 256,
         'writemap': True
     }
     def __init__(self, *args, **argv):
@@ -266,24 +300,22 @@ class Database(object):
         """
         drop - public method to drop a table
         """
-        if not self.table_exists(name):
-            raise DBTableMissing(name)
-
+        if not self.table_exists(name): raise lmdb_TableMissing(name)
         table = self.table(name)
         for index in table.indexes:
             table.delete_index(index)
-
         db = self._env.open_db(name.encode())
         with self._env.begin(write=True) as txn:
             txn.drop(db, delete)
-
         return True
 
     def table(self, name):
         """
         table - public method to get a handle for a table
         """
-        return Table(self._env, name, {})
+        if name not in self._tables:
+            self._tables[name] = Table(self._env, name)
+        return self._tables[name]
 
     def table_exists(self, table_name):
         return table_name in self.tables
@@ -292,36 +324,27 @@ class Database(object):
         key = '_{}_{}'.format(table_name, index_name)
         return key in self.tables
 
-    def create_index(self, table_name, index_name, func, duplicates=False):
+    def create_index(self, table_name, index_name, func, duplicates=False, integer=True):
         """
         create_index - public method to create a new index
         """
-        if not self.table_exists(table_name):
-            raise DBTableMissing(table_name)
-        if self.index_exists(table_name, index_name):
-            raise DBIndexExists(index_name)
-
-        table = self.table(table_name)
-        return table.create_index(index_name, func, duplicates)
+        if not self.table_exists(table_name):             raise lmdb_TableMissing(table_name)
+        if self.index_exists(table_name, index_name):     raise lmdb_IndexExists(index_name)
+        return self.table(table_name).create_index(index_name, func, duplicates, integer)
 
     def delete_index(self, table_name, index_name):
         """
         delete_index - public method to delete an index
         """
-        if not self.table_exists(table_name):
-            raise DBTableMissing(table_name)
-        if not self.index_exists(table_name, index_name):
-            raise DBIndexMissing(index_name)
-
-        table = self.table(table_name)
-        return table.delete_index(index_name)
+        if not self.table_exists(table_name):             raise lmdb_TableMissing(table_name)
+        if not self.index_exists(table_name, index_name): raise lmdb_IndexMissing(index_name)
+        return self.table(table_name).delete_index(index_name)
 
     def indexes(self, name):
         """
         indexes - public method to get the indexes for a table
         """
-        table = self.table(name)
-        return table.indexes
+        return self.table(name).indexes
 
     @property
     def tables(self):
@@ -338,15 +361,6 @@ class Database(object):
                         if not cursor.next():
                             break
         return result
-
-#    def open(self, name, indexes):
-#        self._tables[name] = Table(self._env, name, indexes)
-#        return self._tables[name]
-
-def list(db):
-    for table in db.tables:
-        if table[0] in ['_','@']: continue
-        print(table, db.indexes(table))
 
 
 class UnitTests(unittest.TestCase):
@@ -375,7 +389,7 @@ class UnitTests(unittest.TestCase):
         db = Database(self._database)
         db.table('demo1')
         db.create_index('demo1','by_name', 'name')
-        db.create_index('demo1','by_age', 'age')
+        db.create_index('demo1','by_age', 'age', integer=True, duplicates=True)
         self.assertEqual(db.indexes('demo1'), ['by_age', 'by_name'])
         db.drop('demo1')
         self.assertEqual(db.tables, [])
@@ -387,18 +401,18 @@ class UnitTests(unittest.TestCase):
             {'name': 'Squizzey', 'age': 3000},
             {'name': 'Fred Bloggs', 'age': 45},
             {'name': 'John Doe', 'age': 0},
-            {'name': 'John Smith', 'age': 40}
+            {'name': 'John Smith', 'age': 40},
+            {'name': 'Gareth Bult1', 'age': 21}
         ]
         people = {}
 
         db = Database(self._database)
         table = db.table('demo1')
-        db.create_index('demo1','by_name', 'name')
-        db.create_index('demo1','by_age', 'age')
+        table.create_index('by_name', 'name')
+        table.create_index('by_age', 'age', integer=True, duplicates=True)
         for item in data:
             table.append(item)
             people[item['name']] = item
-        self.assertEqual(table.count,5)
         results = table.find()
         for item in results:
             key = item.get('name', None)
@@ -410,8 +424,60 @@ class UnitTests(unittest.TestCase):
                     self.assertEqual(person['age'], item['age'])
                     self.assertEqual(person['_id'], item['_id'])
 
-        for index in table.indexes:
-            self.assertEqual(table.count_index(index),5)
+        results = table.find('by_name')
+        last = ''
+        for item in results:
+            key = item.get('name', None)
+            self.assertIsNotNone(key)
+            if key:
+                person = people.get(key, None)
+                self.assertIsNotNone(person)
+                if person:
+                    self.assertEqual(person['age'], item['age'])
+                    self.assertEqual(person['_id'], item['_id'])
+                    self.assertGreaterEqual(person['name'], last)
+                    last = person['name']
+
+        results = table.find('by_age')
+        last = 0
+        for item in results:
+            key = item.get('name', None)
+            self.assertIsNotNone(key)
+            if key:
+                person = people.get(key, None)
+                self.assertIsNotNone(person)
+                if person:
+                    self.assertEqual(person['age'], item['age'])
+                    self.assertEqual(person['_id'], item['_id'])
+                    self.assertGreaterEqual(person['age'], last)
+                    last = person['age']
+
+        self.assertEqual(table.count,len(data))
+        self.assertEqual(table.count_index('by_name'),len(data))
+        self.assertEqual(table.count_index('by_age'),len(data))
+
+        table.delete([results[0]['_id']])
+        table.delete([results[1]['_id']])
+        table.delete([results[2]['_id']])
+
+        self.assertEqual(table.count,len(data)-3)
+        self.assertEqual(table.count_index('by_name'),len(data)-3)
+        self.assertEqual(table.count_index('by_age'),len(data)-3)
+
+        results = table.find('by_age')
+        last = 0
+        for item in results:
+            print(item)
+            key = item.get('name', None)
+            self.assertIsNotNone(key)
+            if key:
+                person = people.get(key, None)
+                self.assertIsNotNone(person)
+                if person:
+                    self.assertEqual(person['age'], item['age'])
+                    self.assertEqual(person['_id'], item['_id'])
+                    self.assertGreaterEqual(person['age'], last)
+                    last = person['age']
 
         db.drop('demo1')
         self.assertEqual(db.tables, [])
@@ -745,3 +811,17 @@ if __name__ == "__main__":
 #db = Database('demodb')
 #db.create_table('my_test')
 #db.create_index('my_test', name='by_origin', field="(record):return record.get('origin','')", duplicates=True)
+    #def iterate(self, max=None, callback=print):
+    #    """
+    #    iterate - public method to iterate through a recordset
+    #    """
+    #    with self._env.begin() as txn:
+    #        with Cursor(self._db, txn) as cursor:
+    #            if not cursor.first(): return
+    #            count = 0
+    #            while True:
+    #                key, record = cursor.item()
+    #                record = loads(bytes(record))
+    #                callback(record)
+    #                count += 1
+    #                if not cursor.next() or (max and count>=max): break
