@@ -1,3 +1,5 @@
+<p align="center"><img src="https://travis-ci.org/oddjobz/pymamba.svg?branch=master" height="32"></p>
+
 # PyMamba
 
 PyMamba is a Python database library which utilises LMDB as a storage engine. It's name is derived from the
