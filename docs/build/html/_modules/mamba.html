@@ -1,3 +1,4 @@
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -17,18 +18,17 @@
         VERSION:     '0.1',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
-        HAS_SOURCE:  true
+        HAS_SOURCE:  true,
+        SOURCELINK_SUFFIX: '.txt'
       };
     </script>
     <script type="text/javascript" src="../_static/jquery.js"></script>
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
-    <link rel="search" title="Search" href="../search.html" />
-    <link rel="top" title="pymamba 0.1 documentation" href="../index.html" />
-    <link rel="up" title="Module code" href="index.html" /> 
+    <link rel="search" title="Search" href="../search.html" /> 
   </head>
-  <body role="document">
+  <body>
     <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
       <ul>
@@ -113,7 +113,8 @@
 <span class="kn">from</span> <span class="nn">traceback</span> <span class="k">import</span> <span class="n">print_stack</span>
 
 <div class="viewcode-block" id="Database"><a class="viewcode-back" href="../index.html#mamba.Database">[docs]</a><span class="k">class</span> <span class="nc">Database</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Representation of a Database, this is the main API class</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Representation of a Database, this is the main API class</span>
 <span class="sd">    </span>
 <span class="sd">    :param name: The name of the database to open</span>
 <span class="sd">    :type name: str</span>
@@ -138,7 +139,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 
 <div class="viewcode-block" id="Database.close"><a class="viewcode-back" href="../index.html#mamba.Database.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Close the current database</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Close the current database</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="p">:</span> <span class="k">return</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
@@ -189,8 +191,8 @@
 
 
 <div class="viewcode-block" id="Index"><a class="viewcode-back" href="../index.html#mamba.Index">[docs]</a><span class="k">class</span> <span class="nc">Index</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Representation of a table index created one per index when the table and</span>
-<span class="sd">    it&#39;s indexes are opened.</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Representation of a table index created one per index when the table and it&#39;s indexes are opened.</span>
 <span class="sd">    </span>
 <span class="sd">    :param env: An LMDB Environment object</span>
 <span class="sd">    :type env: Environment</span>
@@ -223,7 +225,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_db</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">open_db</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">_conf</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Index.count"><a class="viewcode-back" href="../index.html#mamba.Index.count">[docs]</a>    <span class="k">def</span> <span class="nf">count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Count the number of items currently present in this index</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Count the number of items currently present in this index</span>
 <span class="sd">        </span>
 <span class="sd">        :param txn: Is an open Transaction </span>
 <span class="sd">        :type txn: Transaction</span>
@@ -238,7 +241,8 @@
             <span class="k">return</span> <span class="n">entries</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="Index.cursor"><a class="viewcode-back" href="../index.html#mamba.Index.cursor">[docs]</a>    <span class="k">def</span> <span class="nf">cursor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Return a cursor into the current index</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return a cursor into the current index</span>
 
 <span class="sd">        :param txn: Is an open Transaction </span>
 <span class="sd">        :type txn: Transaction</span>
@@ -248,7 +252,8 @@
         <span class="k">return</span> <span class="n">Cursor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="p">,</span> <span class="n">txn</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Index.delete"><a class="viewcode-back" href="../index.html#mamba.Index.delete">[docs]</a>    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">record</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Delete the selected record from the current index</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Delete the selected record from the current index</span>
 <span class="sd">        </span>
 <span class="sd">        :param txn: Is an open (write) Transaction</span>
 <span class="sd">        :type txn: Transaction</span>
@@ -262,7 +267,8 @@
         <span class="k">return</span> <span class="n">txn</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_func</span><span class="p">(</span><span class="n">record</span><span class="p">),</span> <span class="n">key</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Index.drop"><a class="viewcode-back" href="../index.html#mamba.Index.drop">[docs]</a>    <span class="k">def</span> <span class="nf">drop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Drop the current index</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Drop the current index</span>
 
 <span class="sd">        :param txn: Is an open Transaction </span>
 <span class="sd">        :type txn: Transaction</span>
@@ -272,7 +278,8 @@
         <span class="k">return</span> <span class="n">txn</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="p">,</span> <span class="n">delete</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Index.get"><a class="viewcode-back" href="../index.html#mamba.Index.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">,</span> <span class="n">record</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Read a single record from the index</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Read a single record from the index</span>
 <span class="sd">        </span>
 <span class="sd">        :param txn: Is an open Transaction</span>
 <span class="sd">        :type txn: Transaction</span>
@@ -284,7 +291,8 @@
         <span class="k">return</span> <span class="n">txn</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_func</span><span class="p">(</span><span class="n">record</span><span class="p">),</span> <span class="n">db</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Index.put"><a class="viewcode-back" href="../index.html#mamba.Index.put">[docs]</a>    <span class="k">def</span> <span class="nf">put</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">record</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Write a new entry into the index</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write a new entry into the index</span>
 <span class="sd">        </span>
 <span class="sd">        :param txn: Is an open Transaction</span>
 <span class="sd">        :type txn: Transaction</span>
@@ -299,7 +307,8 @@
 
 
 <div class="viewcode-block" id="Table"><a class="viewcode-back" href="../index.html#mamba.Table">[docs]</a><span class="k">class</span> <span class="nc">Table</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Representation of a database table</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Representation of a database table</span>
 
 <span class="sd">    :param env: An open database Environment</span>
 <span class="sd">    :type env: Environment</span>
@@ -321,7 +330,8 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">_indexes</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">Index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">doc</span><span class="p">[</span><span class="s1">&#39;func&#39;</span><span class="p">],</span> <span class="n">doc</span><span class="p">[</span><span class="s1">&#39;conf&#39;</span><span class="p">])</span>
 
 <div class="viewcode-block" id="Table.append"><a class="viewcode-back" href="../index.html#mamba.Table.append">[docs]</a>    <span class="k">def</span> <span class="nf">append</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Append a new record to this table</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Append a new record to this table</span>
 <span class="sd">        </span>
 <span class="sd">        :param record: The record to append</span>
 <span class="sd">        :type record: dict</span>
@@ -344,7 +354,8 @@
 
 
 <div class="viewcode-block" id="Table.delete"><a class="viewcode-back" href="../index.html#mamba.Table.delete">[docs]</a>    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Delete a record from this table</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Delete a record from this table</span>
 <span class="sd">        </span>
 <span class="sd">        :param keys: A list of database keys to delete</span>
 <span class="sd">        :type keys: list</span>
@@ -367,7 +378,8 @@
             <span class="k">return</span> <span class="kc">False</span></div>
 
 <div class="viewcode-block" id="Table.drop"><a class="viewcode-back" href="../index.html#mamba.Table.drop">[docs]</a>    <span class="k">def</span> <span class="nf">drop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">delete</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Drop this tablex and all it&#39;s indecies</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Drop this tablex and all it&#39;s indecies</span>
 
 <span class="sd">        :param delete: Whether we delete the table after removing all items</span>
 <span class="sd">        :type delete: bool</span>
@@ -388,7 +400,8 @@
             <span class="k">return</span> <span class="kc">False</span></div>
 
 <div class="viewcode-block" id="Table.empty"><a class="viewcode-back" href="../index.html#mamba.Table.empty">[docs]</a>    <span class="k">def</span> <span class="nf">empty</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Clear all records from the current table</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Clear all records from the current table</span>
 
 <span class="sd">        :return: True if the table was cleared</span>
 <span class="sd">        :rtype: bool</span>
@@ -407,7 +420,8 @@
         <span class="k">return</span> <span class="n">_index_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tables</span></div>
 
 <div class="viewcode-block" id="Table.find"><a class="viewcode-back" href="../index.html#mamba.Table.find">[docs]</a>    <span class="k">def</span> <span class="nf">find</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Find all records either sequentiall or based on an index</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Find all records either sequentiall or based on an index</span>
 <span class="sd">        </span>
 <span class="sd">        :param name: The name of the index to use [OR use natural order] </span>
 <span class="sd">        :type name: str</span>
@@ -444,7 +458,8 @@
         <span class="k">return</span> <span class="n">results</span></div>
 
 <div class="viewcode-block" id="Table.index"><a class="viewcode-back" href="../index.html#mamba.Table.index">[docs]</a>    <span class="k">def</span> <span class="nf">index</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">func</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">duplicates</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">integer</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Return a reference for a names index, or create if not available</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return a reference for a names index, or create if not available</span>
 
 <span class="sd">        :param name: The name of the index to create</span>
 <span class="sd">        :type name: str</span>
@@ -482,7 +497,8 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_indexes</span><span class="p">[</span><span class="n">name</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="Table.unindex"><a class="viewcode-back" href="../index.html#mamba.Table.unindex">[docs]</a>    <span class="k">def</span> <span class="nf">unindex</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Delete the named index</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Delete the named index</span>
 
 <span class="sd">        :param name: The name of the index</span>
 <span class="sd">        :type name: str</span>
@@ -535,7 +551,8 @@
             <span class="k">return</span> <span class="n">txn</span><span class="o">.</span><span class="n">stat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;entries&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span></div>
 
 <span class="k">def</span> <span class="nf">_debug</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Display a debug message with current line number and function name</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Display a debug message with current line number and function name</span>
 
 <span class="sd">    :param self: A reference to the object calling this routine</span>
 <span class="sd">    :type self: object</span>
@@ -549,7 +566,8 @@
 
 
 <span class="k">def</span> <span class="nf">_anonymous</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;An anonymous function used to generate functions for database indecies</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    An anonymous function used to generate functions for database indecies</span>
 
 <span class="sd">    :param text: The body of the function call to generate</span>
 <span class="sd">    :type text: str</span>
@@ -559,7 +577,8 @@
     <span class="k">return</span> <span class="n">scope</span><span class="p">[</span><span class="s1">&#39;func&#39;</span><span class="p">]</span>
 
 <span class="k">def</span> <span class="nf">_index_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Generate the name of the object in which to store index records</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generate the name of the object in which to store index records</span>
 
 <span class="sd">    :param name: The name of the table</span>
 <span class="sd">    :type name: str</span>
@@ -615,7 +634,7 @@
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2017, Gareth Bult.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.6.
     </div>
   </body>
 </html>

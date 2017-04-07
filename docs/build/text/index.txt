@@ -1,0 +1,374 @@
+Welcome to pymamba's documentation!
+***********************************
+
+Contents:
+
+
+Indices and tables
+******************
+
+* Index
+
+* Module Index
+
+* Search Page
+
+
+mamba module
+************
+
+This is the current implementation of "mamba" which is a database
+layout that sites directly on top of LMDB. Currently it's *much*
+faster than Mongo, but currently incomplete and untested .. but it's
+great for  playing with.
+
+Note:
+
+  * When creating an index we need to be able to specify a list of
+    fields for a compound index
+
+  * We need an index-aware record update routine
+
+  * We need a search routine that can handle an index an a filter
+
+class mamba.Database(name, config={})
+
+   Bases: "object"
+
+   Representation of a Database, this is the main API class
+
+   Parameters:
+      * **name** (*str*) -- The name of the database to open
+
+      * **conf** (*dict*) -- Any additional or custom options for
+        this environment
+
+   close()
+
+      Close the current database
+
+   exists(name)
+
+      Test whether a table with a given name already exists
+
+      Parameters:
+         **name** (*str*) -- Table name
+
+      Returns:
+         True if table exists
+
+      Return type:
+         bool
+
+   table(name)
+
+      Return a reference to a table with a given name, creating first
+      if it doesn't exist
+
+      Parameters:
+         **name** (*str*) -- Name of table
+
+      Returns:
+         Reference to table
+
+      Return type:
+         Table
+
+   tables
+
+      PROPERTY - Generate a list of names of the tables associated
+      with this database
+
+      Getter:
+         Returns a list of table names
+
+      Type:
+         list
+
+class mamba.Index(env, name, func, conf)
+
+   Bases: "object"
+
+   Representation of a table index created one per index when the
+   table and it's indexes are opened.
+
+   Parameters:
+      * **env** (*Environment*) -- An LMDB Environment object
+
+      * **name** (*str*) -- The name of the index we're working with
+
+      * **func** (*str*) -- Can be a function used to generate index
+        keys, or a field name
+
+      * **conf** (*dict*) -- Configuration options for this index
+
+   Note: if **func** begins with a **!** it is taken to be a
+     function, otherwise it func is treated as a field name. The field
+     type is dictated by the settings supplied in **conf**.
+
+   count(txn=None)
+
+      Count the number of items currently present in this index
+
+      Parameters:
+         **txn** (*Transaction*) -- Is an open Transaction
+
+      Returns:
+         The number if items in the index
+
+      Return type:
+         int
+
+   cursor(txn)
+
+      Return a cursor into the current index
+
+      Parameters:
+         **txn** (*Transaction*) -- Is an open Transaction
+
+      Returns:
+         An active Cursor object
+
+      Return type:
+         Cursor
+
+   delete(txn, key, record)
+
+      Delete the selected record from the current index
+
+      Parameters:
+         * **txn** (*Transaction*) -- Is an open (write) Transaction
+
+         * **key** (*str*) -- A database key
+
+         * **record** (*dict*) -- A currently existing record
+
+      Returns:
+         True if the record was deleted
+
+      Return type:
+         boolean
+
+   drop(txn)
+
+      Drop the current index
+
+      Parameters:
+         **txn** (*Transaction*) -- Is an open Transaction
+
+      Returns:
+         The record recovered from the index
+
+      Return type:
+         str
+
+   get(txn, record)
+
+      Read a single record from the index
+
+      Parameters:
+         * **txn** (*Transaction*) -- Is an open Transaction
+
+         * **record** (*dict*) -- Is a record template from which we
+           can extract an index field
+
+      Returns:
+         The record recovered from the index
+
+      Return type:
+         str
+
+   put(txn, key, record)
+
+      Write a new entry into the index
+
+      Parameters:
+         * **txn** (*Transaction*) -- Is an open Transaction
+
+         * **key** (*str|int*) -- Is the key to of the record to
+           write
+
+         * **record** (*dict*) -- Is the record to write
+
+      Returns:
+         True if the record was written successfully
+
+      Return type:
+         boolean
+
+class mamba.Table(env, name=None)
+
+   Bases: "object"
+
+   Representation of a database table
+
+   Parameters:
+      * **env** (*Environment*) -- An open database Environment
+
+      * **name** (*str*) -- A table name
+
+   append(record)
+
+      Append a new record to this table
+
+      Parameters:
+         **record** (*dict*) -- The record to append
+
+      Returns:
+         True if the record was successfully appended
+
+      Return type:
+         bool
+
+   delete(keys)
+
+      Delete a record from this table
+
+      Parameters:
+         **keys** (*list*) -- A list of database keys to delete
+
+      Returns:
+         True if all the ids were deleted successfully
+
+      Return type:
+         bool
+
+   drop(delete=True)
+
+      Drop this tablex and all it's indecies
+
+      Parameters:
+         **delete** (*bool*) -- Whether we delete the table after
+         removing all items
+
+      Returns:
+         True if the table was successfully dropped
+
+      Return type:
+         bool
+
+   empty()
+
+      Clear all records from the current table
+
+      Returns:
+         True if the table was cleared
+
+      Return type:
+         bool
+
+   exists(name)
+
+      See whether an index already exists or not
+
+      Parameters:
+         **name** (*str*) -- Name of the index
+
+      Returns:
+         True if index already exists
+
+      Return type:
+         bool
+
+   find(name=None, max=None)
+
+      Find all records either sequentiall or based on an index
+
+      Parameters:
+         * **name** (*str*) -- The name of the index to use [OR use
+           natural order]
+
+         * **max** (*int*) -- The maximum number of records to
+           return
+
+      Returns:
+         The records that were located
+
+      Return type:
+         list
+
+   index(name, func=None, duplicates=False, integer=False)
+
+      Return a reference for a names index, or create if not available
+
+      Parameters:
+         * **name** (*str*) -- The name of the index to create
+
+         * **func** (*str*) -- A specification of the index,
+           !<function>|<field name>
+
+         * **duplicates** (*bool*) -- Whether this index will allow
+           duplicate keys
+
+         * **integer** (*bool*) -- Whether this index has integer
+           keys (or string keys)
+
+      Returns:
+         A reference to the index, created index, or None if index
+         creation fails
+
+      Return type:
+         Index
+
+   indexes
+
+      PROPERTY - Recover a list of indexes for this table
+
+      Getter:
+         The indexes for this table
+
+      Type:
+         list
+
+   records
+
+      PROPERTY - Recover the number of records in this table
+
+      Getter:
+         Record count
+
+      Type:
+         int
+
+   unindex(name)
+
+      Delete the named index
+
+      Parameters:
+         **name** (*str*) -- The name of the index
+
+      Returns:
+         True if the index was deleted successfully
+
+      Return type:
+         boolean
+
+exception mamba.lmdb_IndexExists
+
+   Bases: "exceptions.Exception"
+
+   Exception - index already exists
+
+exception mamba.lmdb_IndexMissing
+
+   Bases: "exceptions.Exception"
+
+   Exception - index does not exist
+
+exception mamba.lmdb_NotFound
+
+   Bases: "exceptions.Exception"
+
+   Exception - expected record was not found
+
+exception mamba.lmdb_TableExists
+
+   Bases: "exceptions.Exception"
+
+   Exception - database table already exists
+
+exception mamba.lmdb_TableMissing
+
+   Bases: "exceptions.Exception"
+
+   Exception - database table does not exist
