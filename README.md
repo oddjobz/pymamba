@@ -3,7 +3,7 @@
 <img src='https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master' alt='Coverage Status' />
 </p>
 
-[![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master)]
+![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master)
 
 # PyMamba
 
