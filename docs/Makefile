@@ -54,6 +54,11 @@ html:
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
 
+online:
+	@echo "Copying files ..."
+	@rsync -ravz build/html/* root@legacy:/var/www/pymamba/
+	@echo "Build finished. The HTML pages are in https://pymamba.linux.co.uk/"
+
 .PHONY: dirhtml
 dirhtml:
 	$(SPHINXBUILD) -b dirhtml $(ALLSPHINXOPTS) $(BUILDDIR)/dirhtml
