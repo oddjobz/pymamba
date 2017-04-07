@@ -154,6 +154,3 @@ class UnitTests(unittest.TestCase):
 
         table.drop(True)
 
-if __name__ == "__main__":
-    unittest.main()
-
