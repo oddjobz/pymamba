@@ -2,13 +2,12 @@
 that sites directly on top of LMDB. Currently it's *much* faster than
 Mongo, but currently incomplete and untested .. but it's great for 
 playing with.
-
-.. note::
-    * When creating an index we need to be able to specify a list of fields for a compound index
-    * We need an index-aware record update routine
-    * We need a search routine that can handle an index an a filter
-
 """
+##############################################################################
+# TODO: When creating an index we need to be able to specify a list of fields for a compound index
+# TODO: We need an index-aware record update routine
+# TODO: We need a search routine that can handle an index an a filter
+# TODO: convert to use generators for search routines
 ##############################################################################
 #
 # MIT License
@@ -143,8 +142,8 @@ class Index(object):
         supplied in **conf**.
     """
     _debug = False
-    _str_tpl = '(k): return str(k["{}"]).encode()'
-    _int_tpl = '(k): return k["{}"].to_bytes(8,"big",signed=False)'
+    _str_t = 'str(k["{}"]).encode()'
+    _int_t = 'k["{}"].to_bytes(8,"big",signed=False)'
 
     def __init__(self, env, name, func, conf):
         self._env = env
@@ -155,8 +154,22 @@ class Index(object):
         if func[0] == '!':
             self._func = _anonymous(func[1:])
         else:
-            fmt = self._int_tpl if self._integer else self._str_tpl
-            self._func = _anonymous(fmt.format(func))
+            if not isinstance(func, list):
+                func = [func]
+            fmt = ''
+            names = []
+            for item in func:
+                if ':' in item:
+                    fld, typ = item.split(':')
+                else:
+                    fld, typ = (item, str)
+                if fmt:
+                    fmt += "+b'|'+"
+                fmt += self._int_t if typ == 'int' else self._str_t
+                names.append(fld)
+            fmt = '(k): return '+fmt
+            #print(fmt.format(*names))
+            self._func = _anonymous(fmt.format(*names))
         self._db = self._env.open_db(**self._conf)
 
     def count(self, txn=None):
@@ -369,7 +382,7 @@ class Table(object):
         with self._env.begin() as txn:
             if not name:
                 with Cursor(self._db, txn) as cursor:
-                    if not cursor.first(): return
+                    if not cursor.first(): return []
                     count = 0
                     while True:
                         doc = cursor.value()
@@ -381,7 +394,7 @@ class Table(object):
                     raise lmdb_IndexMissing(name)
                 index = self._indexes[name]
                 with index.cursor(txn) as cursor:
-                    if not cursor.first(): return
+                    if not cursor.first(): return []
                     count = 0
                     while True:
                         doc = cursor.value()

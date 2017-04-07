@@ -5,31 +5,47 @@ from mamba import Database
 from subprocess import call
 
 class UnitTests(unittest.TestCase):
-    _database = 'unit-db'
+
+    _db_name = 'unit-db'
+    _tb_name = 'demo1'
+    _data = [
+        {'name': 'Gareth Bult', 'age': 21},
+        {'name': 'Squizzey', 'age': 3000},
+        {'name': 'Fred Bloggs', 'age': 45},
+        {'name': 'John Doe', 'age': 40},
+        {'name': 'John Smith', 'age': 40},
+        {'name': 'Jim Smith', 'age': 40},
+        {'name': 'Gareth Bult1', 'age': 21}
+    ]
 
     def setUp(self):
-        call(['rm', '-rf', self._database])
+        call(['rm', '-rf', self._db_name])
 
     def tearDown(self):
         pass
 
+    def generate_data(self, db, table_name):
+        table = db.table(table_name)
+        for row in self._data:
+            table.append(row)
+
     def test_01_basic(self):
-        db = Database(self._database)
+        db = Database(self._db_name)
         self.assertEqual(db.tables, [])
 
     def test_02_create_drop(self):
-        db = Database(self._database)
+        db = Database(self._db_name)
         self.assertEqual(db.tables, [])
-        table = db.table('demo1')
-        self.assertEqual(db.tables, ['demo1'])
+        table = db.table(self._tb_name)
+        self.assertEqual(db.tables, [self._tb_name])
         table.drop(True)
         self.assertEqual(db.tables, [])
 
     def test_03_create_drop_index(self):
-        db = Database(self._database)
-        table = db.table('demo1')
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
         table.index('by_name', 'name')
-        table.index('by_age', 'age', integer=True, duplicates=True)
+        table.index('by_age', 'age:int', integer=True, duplicates=True)
         self.assertEqual(table.indexes, ['by_age', 'by_name'])
         table.drop(True)
         self.assertEqual(db.tables, [])
@@ -40,16 +56,17 @@ class UnitTests(unittest.TestCase):
             {'name': 'Gareth Bult', 'age': 21},
             {'name': 'Squizzey', 'age': 3000},
             {'name': 'Fred Bloggs', 'age': 45},
-            {'name': 'John Doe', 'age': 0},
+            {'name': 'John Doe', 'age': 40},
             {'name': 'John Smith', 'age': 40},
+            {'name': 'Jim Smith', 'age': 40},
             {'name': 'Gareth Bult1', 'age': 21}
         ]
         people = {}
 
-        db = Database(self._database)
-        table = db.table('demo1')
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
         table.index('by_name', 'name')
-        table.index('by_age', 'age', integer=True, duplicates=True)
+        table.index('by_age', 'age:int', integer=True, duplicates=True)
         for item in data:
             table.append(item)
             people[item['name']] = item
@@ -107,7 +124,7 @@ class UnitTests(unittest.TestCase):
         results = table.find('by_age')
         last = 0
         for item in results:
-            print(item)
+            #print(item)
             key = item.get('name', None)
             self.assertIsNotNone(key)
             if key:
@@ -122,6 +139,20 @@ class UnitTests(unittest.TestCase):
         table.drop(True)
         self.assertEqual(db.tables, [])
 
+    def test_20_compound_index(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        table.index('by_age_name', ['age:int', 'name'])
+        self.generate_data(db, self._tb_name)
+        ages = [doc['age'] for doc in self._data]
+        ages.sort()
+        ages.reverse()
+        results = table.find('by_age_name')
+        for row in results:
+            self.assertEqual(row['age'], ages.pop())
+
+        table.drop(True)
 
 if __name__ == "__main__":
     unittest.main()
