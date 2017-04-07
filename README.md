@@ -1,6 +1,6 @@
 <p align="center">
-<img src="https://travis-ci.org/oddjobz/pymamba.svg?branch=master" height="20" />
-<img src='https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master' alt='Coverage Status' />
+<img src="https://travis-ci.org/oddjobz/pymamba.svg?branch=master&v=1" height="20" />
+<img src='https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master&v=1' alt='Coverage Status' />
 </p>
 
 # PyMamba
