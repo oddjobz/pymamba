@@ -1,7 +1,7 @@
 # PyMamba
 
-[![Build Status](https://travis-ci.org/oddjobz/pymamba.svg?branch=master&v=3)](https://travis-ci.org/oddjobz/pymamba)
-[![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master&v=3)](https://coveralls.io/github/oddjobz/pymamba?branch=master)
+[![Build Status](https://travis-ci.org/oddjobz/pymamba.svg?branch=master&v=4)](https://travis-ci.org/oddjobz/pymamba)
+[![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master&v=4)](https://coveralls.io/github/oddjobz/pymamba?branch=master)
 
 PyMamba is a Python database library which utilises LMDB as a storage engine. It's name is derived from the
 *Black Mamba* which is the fastest snake on the planet. Typically PyMamba is a number of orders of magnitude
