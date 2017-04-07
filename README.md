@@ -14,7 +14,7 @@ See the API here: [https://pymamba.linux.co.uk](https://pymamba.linux.co.uk)
 
 ```python
 #!/usr/bin/python3
-from mamba import Database, _debug
+from mamba import Database
 #
 print(">> Define some arbitrary data")
 data = [
