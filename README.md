@@ -1,4 +1,7 @@
-<p align="center"><img src="https://travis-ci.org/oddjobz/pymamba.svg?branch=master" height="32"></p>
+<p align="center">
+    <img src="https://travis-ci.org/oddjobz/pymamba.svg?branch=master" height="20">
+    <img src='https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master'/></a>
+</p>
 
 # PyMamba
 
