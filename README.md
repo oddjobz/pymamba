@@ -4,7 +4,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master&v=4)](https://coveralls.io/github/oddjobz/pymamba?branch=master)
 
 PyMamba is a Python database library which utilises LMDB as a storage engine. It's name is derived from the
-*Black Mamba* which is the fastest snake on the planet. Typically PyMamba is a number of orders of magnitude
+*Black Mamba*, the fastest snake on the planet. Typically PyMamba is a number of orders of magnitude
 faster than alternatives such as MySQL or MongoDB, the trade-off is a reduced feature-set and a lack of language
 portability.
 

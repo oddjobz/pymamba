@@ -67,13 +67,23 @@
 <span class="sd">that sites directly on top of LMDB. Currently it&#39;s *much* faster than</span>
 <span class="sd">Mongo, but currently incomplete and untested .. but it&#39;s great for </span>
 <span class="sd">playing with.</span>
-
-<span class="sd">.. note::</span>
-<span class="sd">    * When creating an index we need to be able to specify a list of fields for a compound index</span>
-<span class="sd">    * We need an index-aware record update routine</span>
-<span class="sd">    * We need a search routine that can handle an index an a filter</span>
-
 <span class="sd">&quot;&quot;&quot;</span>
+<span class="c1">##############################################################################</span>
+<span class="c1"># TODO: We need an index-aware record update routine</span>
+<span class="c1"># TODO: We need a search routine that can handle an index an a filter</span>
+<span class="c1"># TODO: convert to use generators for search routines</span>
+<span class="c1"># Test Coverage</span>
+<span class="c1"># TODO: Index. !function</span>
+<span class="c1"># TODO: Index.count - with txn</span>
+<span class="c1"># TODO: Index.drop</span>
+<span class="c1"># TODO: Index.get</span>
+<span class="c1"># TODO: Exception on Table.append</span>
+<span class="c1"># TODO: Exception on Table.delete</span>
+<span class="c1"># TODO: Exception on Table.drop</span>
+<span class="c1"># TODO: Table.find Exception with missing index</span>
+<span class="c1"># TODO: Table.index Exception writing meta</span>
+<span class="c1"># TODO: Table.unindex Exception</span>
+<span class="c1">#</span>
 <span class="c1">##############################################################################</span>
 <span class="c1">#</span>
 <span class="c1"># MIT License</span>
@@ -155,7 +165,7 @@
 <span class="sd">        :return: True if table exists</span>
 <span class="sd">        :rtype: bool</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tables</span></div>
+        <span class="k">return</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tables</span></div>
 
 <div class="viewcode-block" id="Database.table"><a class="viewcode-back" href="../index.html#mamba.Database.table">[docs]</a>    <span class="k">def</span> <span class="nf">table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
@@ -208,8 +218,8 @@
 <span class="sd">        supplied in **conf**.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">_debug</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="n">_str_tpl</span> <span class="o">=</span> <span class="s1">&#39;(k): return str(k[&quot;</span><span class="si">{}</span><span class="s1">&quot;]).encode()&#39;</span>
-    <span class="n">_int_tpl</span> <span class="o">=</span> <span class="s1">&#39;(k): return k[&quot;</span><span class="si">{}</span><span class="s1">&quot;].to_bytes(8,&quot;big&quot;,signed=False)&#39;</span>
+    <span class="n">_str_t</span> <span class="o">=</span> <span class="s1">&#39;str(k[&quot;</span><span class="si">{}</span><span class="s1">&quot;]).encode()&#39;</span>
+    <span class="n">_int_t</span> <span class="o">=</span> <span class="s1">&#39;k[&quot;</span><span class="si">{}</span><span class="s1">&quot;].to_bytes(8,&quot;big&quot;,signed=False)&#39;</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">conf</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_env</span> <span class="o">=</span> <span class="n">env</span>
@@ -220,8 +230,22 @@
         <span class="k">if</span> <span class="n">func</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;!&#39;</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_func</span> <span class="o">=</span> <span class="n">_anonymous</span><span class="p">(</span><span class="n">func</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">fmt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_int_tpl</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_integer</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_str_tpl</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_func</span> <span class="o">=</span> <span class="n">_anonymous</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">func</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">func</span> <span class="o">=</span> <span class="p">[</span><span class="n">func</span><span class="p">]</span>
+            <span class="n">fmt</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">func</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s1">&#39;:&#39;</span> <span class="ow">in</span> <span class="n">item</span><span class="p">:</span>
+                    <span class="n">fld</span><span class="p">,</span> <span class="n">typ</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">fld</span><span class="p">,</span> <span class="n">typ</span> <span class="o">=</span> <span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">fmt</span><span class="p">:</span>
+                    <span class="n">fmt</span> <span class="o">+=</span> <span class="s2">&quot;+b&#39;|&#39;+&quot;</span>
+                <span class="n">fmt</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_int_t</span> <span class="k">if</span> <span class="n">typ</span> <span class="o">==</span> <span class="s1">&#39;int&#39;</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_str_t</span>
+                <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fld</span><span class="p">)</span>
+            <span class="n">fmt</span> <span class="o">=</span> <span class="s1">&#39;(k): return &#39;</span><span class="o">+</span><span class="n">fmt</span>
+            <span class="c1">#print(fmt.format(*names))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_func</span> <span class="o">=</span> <span class="n">_anonymous</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">names</span><span class="p">))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_db</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">open_db</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">_conf</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Index.count"><a class="viewcode-back" href="../index.html#mamba.Index.count">[docs]</a>    <span class="k">def</span> <span class="nf">count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -417,7 +441,7 @@
 <span class="sd">        :return: True if index already exists</span>
 <span class="sd">        :rtype: bool</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="n">_index_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tables</span></div>
+        <span class="k">return</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_indexes</span></div>
 
 <div class="viewcode-block" id="Table.find"><a class="viewcode-back" href="../index.html#mamba.Table.find">[docs]</a>    <span class="k">def</span> <span class="nf">find</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
@@ -434,7 +458,7 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span> <span class="k">as</span> <span class="n">txn</span><span class="p">:</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
                 <span class="k">with</span> <span class="n">Cursor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="p">,</span> <span class="n">txn</span><span class="p">)</span> <span class="k">as</span> <span class="n">cursor</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="ow">not</span> <span class="n">cursor</span><span class="o">.</span><span class="n">first</span><span class="p">():</span> <span class="k">return</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">cursor</span><span class="o">.</span><span class="n">first</span><span class="p">():</span> <span class="k">return</span> <span class="p">[]</span>
                     <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
                     <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
                         <span class="n">doc</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
@@ -446,7 +470,7 @@
                     <span class="k">raise</span> <span class="n">lmdb_IndexMissing</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
                 <span class="n">index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_indexes</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
                 <span class="k">with</span> <span class="n">index</span><span class="o">.</span><span class="n">cursor</span><span class="p">(</span><span class="n">txn</span><span class="p">)</span> <span class="k">as</span> <span class="n">cursor</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="ow">not</span> <span class="n">cursor</span><span class="o">.</span><span class="n">first</span><span class="p">():</span> <span class="k">return</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">cursor</span><span class="o">.</span><span class="n">first</span><span class="p">():</span> <span class="k">return</span> <span class="p">[]</span>
                     <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
                     <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
                         <span class="n">doc</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
