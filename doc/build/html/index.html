@@ -1,0 +1,605 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Welcome to pymamba’s documentation! &#8212; pymamba 0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pymamba 0.1 documentation" href="#" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">pymamba 0.1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Welcome to pymamba&#8217;s documentation!</a></li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+<li><a class="reference internal" href="#module-mamba">mamba module</a></li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/index.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="welcome-to-pymamba-s-documentation">
+<h1>Welcome to pymamba&#8217;s documentation!<a class="headerlink" href="#welcome-to-pymamba-s-documentation" title="Permalink to this headline">¶</a></h1>
+<p>Contents:</p>
+<div class="toctree-wrapper compound">
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+<div class="section" id="module-mamba">
+<span id="mamba-module"></span><h1>mamba module<a class="headerlink" href="#module-mamba" title="Permalink to this headline">¶</a></h1>
+<p>This is the current implementation of &#8220;mamba&#8221; which is a database layout
+that sites directly on top of LMDB. Currently it&#8217;s <em>much</em> faster than
+Mongo, but currently incomplete and untested .. but it&#8217;s great for 
+playing with.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<ul class="last simple">
+<li>When creating an index we need to be able to specify a list of fields for a compound index</li>
+<li>We need an index-aware record update routine</li>
+<li>We need a search routine that can handle an index an a filter</li>
+</ul>
+</div>
+<dl class="class">
+<dt id="mamba.Database">
+<em class="property">class </em><code class="descclassname">mamba.</code><code class="descname">Database</code><span class="sig-paren">(</span><em>name</em>, <em>config={}</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Database"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Database" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">object</span></code></p>
+<p>Representation of a Database, this is the main API class</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>name</strong> (<em>str</em>) &#8211; The name of the database to open</li>
+<li><strong>conf</strong> (<em>dict</em>) &#8211; Any additional or custom options for this environment</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="mamba.Database.close">
+<code class="descname">close</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Database.close"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Database.close" title="Permalink to this definition">¶</a></dt>
+<dd><p>Close the current database</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Database.exists">
+<code class="descname">exists</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Database.exists"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Database.exists" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test whether a table with a given name already exists</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>name</strong> (<em>str</em>) &#8211; Table name</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">True if table exists</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">bool</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Database.table">
+<code class="descname">table</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Database.table"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Database.table" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a reference to a table with a given name, creating first if it doesn&#8217;t exist</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>name</strong> (<em>str</em>) &#8211; Name of table</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">Reference to table</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference internal" href="#mamba.Table" title="mamba.Table">Table</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="mamba.Database.tables">
+<code class="descname">tables</code><a class="headerlink" href="#mamba.Database.tables" title="Permalink to this definition">¶</a></dt>
+<dd><p>PROPERTY - Generate a list of names of the tables associated with this database</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Getter:</th><td class="field-body">Returns a list of table names</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Type:</th><td class="field-body">list</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="mamba.Index">
+<em class="property">class </em><code class="descclassname">mamba.</code><code class="descname">Index</code><span class="sig-paren">(</span><em>env</em>, <em>name</em>, <em>func</em>, <em>conf</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">object</span></code></p>
+<p>Representation of a table index created one per index when the table and
+it&#8217;s indexes are opened.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>env</strong> (<em>Environment</em>) &#8211; An LMDB Environment object</li>
+<li><strong>name</strong> (<em>str</em>) &#8211; The name of the index we&#8217;re working with</li>
+<li><strong>func</strong> (<em>str</em>) &#8211; Can be a function used to generate index keys, or a field name</li>
+<li><strong>conf</strong> (<em>dict</em>) &#8211; Configuration options for this index</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">if <strong>func</strong> begins with a <strong>!</strong> it is taken to be a function, otherwise
+it func is treated as a field name. The field type is dictated by the settings
+supplied in <strong>conf</strong>.</p>
+</div>
+<dl class="method">
+<dt id="mamba.Index.count">
+<code class="descname">count</code><span class="sig-paren">(</span><em>txn=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Index.count"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Index.count" title="Permalink to this definition">¶</a></dt>
+<dd><p>Count the number of items currently present in this index</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>txn</strong> (<em>Transaction</em>) &#8211; Is an open Transaction</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The number if items in the index</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">int</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Index.cursor">
+<code class="descname">cursor</code><span class="sig-paren">(</span><em>txn</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Index.cursor"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Index.cursor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a cursor into the current index</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>txn</strong> (<em>Transaction</em>) &#8211; Is an open Transaction</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">An active Cursor object</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">Cursor</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Index.delete">
+<code class="descname">delete</code><span class="sig-paren">(</span><em>txn</em>, <em>key</em>, <em>record</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Index.delete"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Index.delete" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete the selected record from the current index</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>txn</strong> (<em>Transaction</em>) &#8211; Is an open (write) Transaction</li>
+<li><strong>key</strong> (<em>str</em>) &#8211; A database key</li>
+<li><strong>record</strong> (<em>dict</em>) &#8211; A currently existing record</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">True if the record was deleted</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">boolean</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Index.drop">
+<code class="descname">drop</code><span class="sig-paren">(</span><em>txn</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Index.drop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Index.drop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Drop the current index</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>txn</strong> (<em>Transaction</em>) &#8211; Is an open Transaction</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The record recovered from the index</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">str</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Index.get">
+<code class="descname">get</code><span class="sig-paren">(</span><em>txn</em>, <em>record</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Index.get"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Index.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a single record from the index</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>txn</strong> (<em>Transaction</em>) &#8211; Is an open Transaction</li>
+<li><strong>record</strong> (<em>dict</em>) &#8211; Is a record template from which we can extract an index field</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The record recovered from the index</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">str</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Index.put">
+<code class="descname">put</code><span class="sig-paren">(</span><em>txn</em>, <em>key</em>, <em>record</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Index.put"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Index.put" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write a new entry into the index</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>txn</strong> (<em>Transaction</em>) &#8211; Is an open Transaction</li>
+<li><strong>key</strong> (<em>str|int</em>) &#8211; Is the key to of the record to write</li>
+<li><strong>record</strong> (<em>dict</em>) &#8211; Is the record to write</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">True if the record was written successfully</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">boolean</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="mamba.Table">
+<em class="property">class </em><code class="descclassname">mamba.</code><code class="descname">Table</code><span class="sig-paren">(</span><em>env</em>, <em>name=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Table"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Table" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">object</span></code></p>
+<p>Representation of a database table</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>env</strong> (<em>Environment</em>) &#8211; An open database Environment</li>
+<li><strong>name</strong> (<em>str</em>) &#8211; A table name</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="mamba.Table.append">
+<code class="descname">append</code><span class="sig-paren">(</span><em>record</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Table.append"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Table.append" title="Permalink to this definition">¶</a></dt>
+<dd><p>Append a new record to this table</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>record</strong> (<em>dict</em>) &#8211; The record to append</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">True if the record was successfully appended</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">bool</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Table.delete">
+<code class="descname">delete</code><span class="sig-paren">(</span><em>keys</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Table.delete"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Table.delete" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete a record from this table</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>keys</strong> (<em>list</em>) &#8211; A list of database keys to delete</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">True if all the ids were deleted successfully</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">bool</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Table.drop">
+<code class="descname">drop</code><span class="sig-paren">(</span><em>delete=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Table.drop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Table.drop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Drop this tablex and all it&#8217;s indecies</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>delete</strong> (<em>bool</em>) &#8211; Whether we delete the table after removing all items</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">True if the table was successfully dropped</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">bool</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Table.empty">
+<code class="descname">empty</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Table.empty"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Table.empty" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clear all records from the current table</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">True if the table was cleared</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">bool</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Table.exists">
+<code class="descname">exists</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Table.exists"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Table.exists" title="Permalink to this definition">¶</a></dt>
+<dd><p>See whether an index already exists or not</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>name</strong> (<em>str</em>) &#8211; Name of the index</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">True if index already exists</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">bool</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Table.find">
+<code class="descname">find</code><span class="sig-paren">(</span><em>name=None</em>, <em>max=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Table.find"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Table.find" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find all records either sequentiall or based on an index</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>name</strong> (<em>str</em>) &#8211; The name of the index to use [OR use natural order]</li>
+<li><strong>max</strong> (<em>int</em>) &#8211; The maximum number of records to return</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The records that were located</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">list</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Table.index">
+<code class="descname">index</code><span class="sig-paren">(</span><em>name</em>, <em>func=None</em>, <em>duplicates=False</em>, <em>integer=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Table.index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Table.index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a reference for a names index, or create if not available</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>name</strong> (<em>str</em>) &#8211; The name of the index to create</li>
+<li><strong>func</strong> (<em>str</em>) &#8211; A specification of the index, !&lt;function&gt;|&lt;field name&gt;</li>
+<li><strong>duplicates</strong> (<em>bool</em>) &#8211; Whether this index will allow duplicate keys</li>
+<li><strong>integer</strong> (<em>bool</em>) &#8211; Whether this index has integer keys (or string keys)</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A reference to the index, created index, or None if index creation fails</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="#mamba.Index" title="mamba.Index">Index</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="mamba.Table.indexes">
+<code class="descname">indexes</code><a class="headerlink" href="#mamba.Table.indexes" title="Permalink to this definition">¶</a></dt>
+<dd><p>PROPERTY - Recover a list of indexes for this table</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Getter:</th><td class="field-body">The indexes for this table</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Type:</th><td class="field-body">list</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="mamba.Table.records">
+<code class="descname">records</code><a class="headerlink" href="#mamba.Table.records" title="Permalink to this definition">¶</a></dt>
+<dd><p>PROPERTY - Recover the number of records in this table</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Getter:</th><td class="field-body">Record count</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Type:</th><td class="field-body">int</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="mamba.Table.unindex">
+<code class="descname">unindex</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mamba.html#Table.unindex"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.Table.unindex" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete the named index</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>name</strong> (<em>str</em>) &#8211; The name of the index</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">True if the index was deleted successfully</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">boolean</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="exception">
+<dt id="mamba.lmdb_IndexExists">
+<em class="property">exception </em><code class="descclassname">mamba.</code><code class="descname">lmdb_IndexExists</code><a class="reference internal" href="_modules/mamba.html#lmdb_IndexExists"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.lmdb_IndexExists" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">Exception</span></code></p>
+<p>Exception - index already exists</p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="mamba.lmdb_IndexMissing">
+<em class="property">exception </em><code class="descclassname">mamba.</code><code class="descname">lmdb_IndexMissing</code><a class="reference internal" href="_modules/mamba.html#lmdb_IndexMissing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.lmdb_IndexMissing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">Exception</span></code></p>
+<p>Exception - index does not exist</p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="mamba.lmdb_NotFound">
+<em class="property">exception </em><code class="descclassname">mamba.</code><code class="descname">lmdb_NotFound</code><a class="reference internal" href="_modules/mamba.html#lmdb_NotFound"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.lmdb_NotFound" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">Exception</span></code></p>
+<p>Exception - expected record was not found</p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="mamba.lmdb_TableExists">
+<em class="property">exception </em><code class="descclassname">mamba.</code><code class="descname">lmdb_TableExists</code><a class="reference internal" href="_modules/mamba.html#lmdb_TableExists"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.lmdb_TableExists" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">Exception</span></code></p>
+<p>Exception - database table already exists</p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="mamba.lmdb_TableMissing">
+<em class="property">exception </em><code class="descclassname">mamba.</code><code class="descname">lmdb_TableMissing</code><a class="reference internal" href="_modules/mamba.html#lmdb_TableMissing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#mamba.lmdb_TableMissing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">Exception</span></code></p>
+<p>Exception - database table does not exist</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">pymamba 0.1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2017, Gareth Bult.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

@@ -48,7 +48,8 @@ from uuid import uuid1 as UUID
 from traceback import print_stack
 
 class Database(object):
-    """Representation of a Database, this is the main API class
+    """
+    Representation of a Database, this is the main API class
     
     :param name: The name of the database to open
     :type name: str
@@ -73,7 +74,8 @@ class Database(object):
         self.close()
 
     def close(self):
-        """Close the current database
+        """
+        Close the current database
         """
         if not self._env: return
         self._env.close()
@@ -124,8 +126,8 @@ class Database(object):
 
 
 class Index(object):
-    """Representation of a table index created one per index when the table and
-    it's indexes are opened.
+    """
+    Representation of a table index created one per index when the table and it's indexes are opened.
     
     :param env: An LMDB Environment object
     :type env: Environment
@@ -158,7 +160,8 @@ class Index(object):
         self._db = self._env.open_db(**self._conf)
 
     def count(self, txn=None):
-        """Count the number of items currently present in this index
+        """
+        Count the number of items currently present in this index
         
         :param txn: Is an open Transaction 
         :type txn: Transaction
@@ -173,7 +176,8 @@ class Index(object):
             return entries()
 
     def cursor(self, txn):
-        """Return a cursor into the current index
+        """
+        Return a cursor into the current index
 
         :param txn: Is an open Transaction 
         :type txn: Transaction
@@ -183,7 +187,8 @@ class Index(object):
         return Cursor(self._db, txn)
 
     def delete(self, txn, key, record):
-        """Delete the selected record from the current index
+        """
+        Delete the selected record from the current index
         
         :param txn: Is an open (write) Transaction
         :type txn: Transaction
@@ -197,7 +202,8 @@ class Index(object):
         return txn.delete(self._func(record), key, db=self._db)
 
     def drop(self, txn):
-        """Drop the current index
+        """
+        Drop the current index
 
         :param txn: Is an open Transaction 
         :type txn: Transaction
@@ -207,7 +213,8 @@ class Index(object):
         return txn.drop(self._db, delete=False)
 
     def get(self, txn, record):
-        """Read a single record from the index
+        """
+        Read a single record from the index
         
         :param txn: Is an open Transaction
         :type txn: Transaction
@@ -219,7 +226,8 @@ class Index(object):
         return txn.get(self._func(record), db=self._db)
 
     def put(self, txn, key, record):
-        """Write a new entry into the index
+        """
+        Write a new entry into the index
         
         :param txn: Is an open Transaction
         :type txn: Transaction
@@ -234,7 +242,8 @@ class Index(object):
 
 
 class Table(object):
-    """Representation of a database table
+    """
+    Representation of a database table
 
     :param env: An open database Environment
     :type env: Environment
@@ -256,7 +265,8 @@ class Table(object):
                 self._indexes[index] = Index(self._env, index, doc['func'], doc['conf'])
 
     def append(self, record):
-        """Append a new record to this table
+        """
+        Append a new record to this table
         
         :param record: The record to append
         :type record: dict
@@ -279,7 +289,8 @@ class Table(object):
 
 
     def delete(self, keys):
-        """Delete a record from this table
+        """
+        Delete a record from this table
         
         :param keys: A list of database keys to delete
         :type keys: list
@@ -302,7 +313,8 @@ class Table(object):
             return False
 
     def drop(self, delete=True):
-        """Drop this tablex and all it's indecies
+        """
+        Drop this tablex and all it's indecies
 
         :param delete: Whether we delete the table after removing all items
         :type delete: bool
@@ -323,7 +335,8 @@ class Table(object):
             return False
 
     def empty(self):
-        """Clear all records from the current table
+        """
+        Clear all records from the current table
 
         :return: True if the table was cleared
         :rtype: bool
@@ -342,7 +355,8 @@ class Table(object):
         return _index_name(self, name) in self._tables
 
     def find(self, name=None, max=None):
-        """Find all records either sequentiall or based on an index
+        """
+        Find all records either sequentiall or based on an index
         
         :param name: The name of the index to use [OR use natural order] 
         :type name: str
@@ -379,7 +393,8 @@ class Table(object):
         return results
 
     def index(self, name, func=None, duplicates=False, integer=False):
-        """Return a reference for a names index, or create if not available
+        """
+        Return a reference for a names index, or create if not available
 
         :param name: The name of the index to create
         :type name: str
@@ -417,7 +432,8 @@ class Table(object):
         return self._indexes[name]
 
     def unindex(self, name):
-        """Delete the named index
+        """
+        Delete the named index
 
         :param name: The name of the index
         :type name: str
@@ -470,7 +486,8 @@ class Table(object):
             return txn.stat(self._db).get('entries', 0)
 
 def _debug(self, msg):
-    """Display a debug message with current line number and function name
+    """
+    Display a debug message with current line number and function name
 
     :param self: A reference to the object calling this routine
     :type self: object
@@ -484,7 +501,8 @@ def _debug(self, msg):
 
 
 def _anonymous(text):
-    """An anonymous function used to generate functions for database indecies
+    """
+    An anonymous function used to generate functions for database indecies
 
     :param text: The body of the function call to generate
     :type text: str
@@ -494,7 +512,8 @@ def _anonymous(text):
     return scope['func']
 
 def _index_name(self, name):
-    """Generate the name of the object in which to store index records
+    """
+    Generate the name of the object in which to store index records
 
     :param name: The name of the table
     :type name: str
