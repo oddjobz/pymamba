@@ -8,7 +8,7 @@ portability.
 After experimenting with readthedocs.org I've settled on self-hosted Sphinx API documentation, this may change
 if issued with RTD can be resolved.
 
-See the API here: ![https://pymamba.linux.co.uk](https://pymamba.linux.co.uk)
+See the API here: [https://pymamba.linux.co.uk](https://pymamba.linux.co.uk)
 
 #### Examples
 
