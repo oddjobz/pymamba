@@ -4,10 +4,26 @@ Mongo, but currently incomplete and untested .. but it's great for
 playing with.
 """
 ##############################################################################
-# TODO: When creating an index we need to be able to specify a list of fields for a compound index
 # TODO: We need an index-aware record update routine
 # TODO: We need a search routine that can handle an index an a filter
 # TODO: convert to use generators for search routines
+# Test Coverage
+# TODO: Database.exists
+# TODO: Index. !function
+# TODO: Index.count - with txn
+# TODO: Index.drop
+# TODO: Index.get
+# TODO: Open indexes on Table open not working
+# TODO: Exception on Table.append
+# TODO: Exception on Table.delete
+# TODO: Exception on Table.drop
+# TODO: Table.empty
+# TODO: Table.exists
+# TODO: Table.find Exception with missing index
+# TODO: Table.index Exception writing meta
+# TODO: Table.unindex Exception
+# TODO: _debug
+#
 ##############################################################################
 #
 # MIT License
