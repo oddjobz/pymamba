@@ -154,3 +154,16 @@ class UnitTests(unittest.TestCase):
 
         table.drop(True)
 
+    def test_21_table_reopen(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        table.index('by_age_name', ['age:int', 'name'])
+        table.index('by_name', 'name')
+        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        self.generate_data(db, self._tb_name)
+        db.close()
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        self.assertEqual(['by_age', 'by_age_name', 'by_name'], table.indexes)
+

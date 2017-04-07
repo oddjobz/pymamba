@@ -13,7 +13,7 @@ playing with.
 # TODO: Index.count - with txn
 # TODO: Index.drop
 # TODO: Index.get
-# TODO: Open indexes on Table open not working
+# TODO: Open indexes on Table open not working **
 # TODO: Exception on Table.append
 # TODO: Exception on Table.delete
 # TODO: Exception on Table.drop
