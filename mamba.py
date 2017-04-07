@@ -8,21 +8,16 @@ playing with.
 # TODO: We need a search routine that can handle an index an a filter
 # TODO: convert to use generators for search routines
 # Test Coverage
-# TODO: Database.exists
 # TODO: Index. !function
 # TODO: Index.count - with txn
 # TODO: Index.drop
 # TODO: Index.get
-# TODO: Open indexes on Table open not working **
 # TODO: Exception on Table.append
 # TODO: Exception on Table.delete
 # TODO: Exception on Table.drop
-# TODO: Table.empty
-# TODO: Table.exists
 # TODO: Table.find Exception with missing index
 # TODO: Table.index Exception writing meta
 # TODO: Table.unindex Exception
-# TODO: _debug
 #
 ##############################################################################
 #
@@ -105,7 +100,7 @@ class Database(object):
         :return: True if table exists
         :rtype: bool
         """
-        return name in self._tables
+        return name in self.tables
 
     def table(self, name):
         """
@@ -381,7 +376,7 @@ class Table(object):
         :return: True if index already exists
         :rtype: bool
         """
-        return _index_name(self, name) in self._tables
+        return name in self._indexes
 
     def find(self, name=None, max=None):
         """

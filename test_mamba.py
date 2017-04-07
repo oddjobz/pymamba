@@ -1,13 +1,14 @@
 #!/usr/bin/python3
 
 import unittest
-from mamba import Database
+from mamba import Database, _debug
 from subprocess import call
 
 class UnitTests(unittest.TestCase):
 
     _db_name = 'unit-db'
     _tb_name = 'demo1'
+    _debug = True
     _data = [
         {'name': 'Gareth Bult', 'age': 21},
         {'name': 'Squizzey', 'age': 3000},
@@ -167,3 +168,38 @@ class UnitTests(unittest.TestCase):
         table = db.table(self._tb_name)
         self.assertEqual(['by_age', 'by_age_name', 'by_name'], table.indexes)
 
+    def test_22_table_exists(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        self.assertTrue(db.exists(self._tb_name))
+
+    def test_23_try_debug(self):
+
+        _debug(self, 'We are here!')
+
+    def test_24_index_exists(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        table.index('by_age_name', ['age:int', 'name'])
+        table.index('by_name', 'name')
+        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        self.assertTrue(table.exists('by_name'))
+        db.close()
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        self.assertTrue(table.exists('by_name'))
+
+    def test_25_table_empty(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        table.index('by_age_name', ['age:int', 'name'])
+        table.index('by_name', 'name')
+        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        self.generate_data(db, self._tb_name)
+        self.assertEqual(table.records, len(self._data))
+        table.empty()
+        table = db.table(self._tb_name)
+        self.assertEqual(table.records, 0)
