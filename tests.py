@@ -20,18 +20,18 @@ class UnitTests(unittest.TestCase):
     def test_02_create_drop(self):
         db = Database(self._database)
         self.assertEqual(db.tables, [])
-        db.table('demo1')
+        table = db.table('demo1')
         self.assertEqual(db.tables, ['demo1'])
-        db.drop('demo1')
+        table.drop(True)
         self.assertEqual(db.tables, [])
 
     def test_03_create_drop_index(self):
         db = Database(self._database)
-        db.table('demo1')
-        db.create_index('demo1', 'by_name', 'name')
-        db.create_index('demo1', 'by_age', 'age', integer=True, duplicates=True)
-        self.assertEqual(db.indexes('demo1'), ['by_age', 'by_name'])
-        db.drop('demo1')
+        table = db.table('demo1')
+        table.index('by_name', 'name')
+        table.index('by_age', 'age', integer=True, duplicates=True)
+        self.assertEqual(table.indexes, ['by_age', 'by_name'])
+        table.drop(True)
         self.assertEqual(db.tables, [])
 
     def test_04_put_data(self):
@@ -48,8 +48,8 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._database)
         table = db.table('demo1')
-        table.create_index('by_name', 'name')
-        table.create_index('by_age', 'age', integer=True, duplicates=True)
+        table.index('by_name', 'name')
+        table.index('by_age', 'age', integer=True, duplicates=True)
         for item in data:
             table.append(item)
             people[item['name']] = item
@@ -92,17 +92,17 @@ class UnitTests(unittest.TestCase):
                     self.assertGreaterEqual(person['age'], last)
                     last = person['age']
 
-        self.assertEqual(table.count, len(data))
-        self.assertEqual(table.count_index('by_name'), len(data))
-        self.assertEqual(table.count_index('by_age'), len(data))
+        self.assertEqual(table.records, len(data))
+        self.assertEqual(table.index('by_name').count(), len(data))
+        self.assertEqual(table.index('by_age').count(), len(data))
 
         table.delete([results[0]['_id']])
         table.delete([results[1]['_id']])
         table.delete([results[2]['_id']])
 
-        self.assertEqual(table.count, len(data) - 3)
-        self.assertEqual(table.count_index('by_name'), len(data) - 3)
-        self.assertEqual(table.count_index('by_age'), len(data) - 3)
+        self.assertEqual(table.records, len(data) - 3)
+        self.assertEqual(table.index('by_name').count(), len(data) - 3)
+        self.assertEqual(table.index('by_age').count(), len(data) - 3)
 
         results = table.find('by_age')
         last = 0
@@ -119,7 +119,7 @@ class UnitTests(unittest.TestCase):
                     self.assertGreaterEqual(person['age'], last)
                     last = person['age']
 
-        db.drop('demo1')
+        table.drop(True)
         self.assertEqual(db.tables, [])
 
 

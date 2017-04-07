@@ -1,4 +1,14 @@
-#!/usr/bin/python3
+""" This is the current implementation of "mamba" which is a database layout
+that sites directly on top of LMDB. Currently it's *much* faster than
+Mongo, but currently incomplete and untested .. but it's great for 
+playing with.
+
+.. note::
+    * When creating an index we need to be able to specify a list of fields for a compound index
+    * We need an index-aware record update routine
+    * We need a search routine that can handle an index an a filter
+
+"""
 ##############################################################################
 #
 # MIT License
@@ -37,14 +47,13 @@ from sys import _getframe
 from uuid import uuid1 as UUID
 from traceback import print_stack
 
-
 class Database(object):
     """Representation of a Database, this is the main API class
     
-    :param database: The name of the database to open
-    :type database: str
-    :param configuration: Any additional or custom options for this environment
-    :type configuration: dict
+    :param name: The name of the database to open
+    :type name: str
+    :param conf: Any additional or custom options for this environment
+    :type conf: dict  
     """
     _config = {
         'map_size': 1024*1024*1024 * 2,
@@ -54,24 +63,14 @@ class Database(object):
         'max_dbs': 256,
         'writemap': True
     }
-    def __init__(self, *args, **argv):
-        _config = dict(self._config, **argv.get('env', {}))
+    def __init__(self, name, config={}):
+        _config = dict(self._config, **config.get('env', {}))
         self._tables = {}
-        self._env = Environment(args[0], **_config)
+        self._env = Environment(name, **_config)
         self._db = self._env.open_db()
 
     def __del__(self):
         self.close()
-
-    def clear(self, name):
-        """Clear all records from the named table
-        
-        :param name: The table name
-        :type name: str
-        :return: True if the table was cleared
-        :rtype: bool
-        """
-        return self.drop(name, False)
 
     def close(self):
         """Close the current database
@@ -80,88 +79,37 @@ class Database(object):
         self._env.close()
         self._env = None
 
-    def create_index(self, table_name, index_name, func, duplicates=False, integer=True):
-        """Create a new index on the named table
-        
-        :param table_name: The name of the table to operate on
-        :type table_name: str
-        :param index_name: The name of the new index
-        :type index_name: str
-        :param func: Can be a function used to generate index keys, or a field name
-        :type func: str
-        :param duplicates: Whether we allow duplicate keys 
-        :type duplicates: bool
-        :param integer: Whether we are an integer key (or string)
-        :type integer: bool
-        :return: True if the index was created successfully
-        :rtype: bool
+    def exists(self, name):
         """
-        if not self.table_exists(table_name):             raise lmdb_TableMissing(table_name)
-        if self.index_exists(table_name, index_name):     raise lmdb_IndexExists(index_name)
-        return self.table(table_name).create_index(index_name, func, duplicates, integer)
+        Test whether a table with a given name already exists
 
-    def delete_index(self, table_name, index_name):
-        """Delete the named index
-        
-        :param table_name: The name of the table to operate on
-        :type table_name: str
-        :param index_name: The name of the index to delete
-        :type index_name: str
-        :return: True if the index was deleted successfully
-        :rtype: bool
-        """
-        if not self.table_exists(table_name):             raise lmdb_TableMissing(table_name)
-        if not self.index_exists(table_name, index_name): raise lmdb_IndexMissing(index_name)
-        return self.table(table_name).delete_index(index_name)
-
-    def drop(self, name, delete=True):
-        """Drop the named table and associated indecies
-
-        :param name: Table to drop
+        :param name: Table name
         :type name: str
-        :param delete: Whether we delete the table after removing all items
-        :type delete: bool
-        :return: True if the table was successfully dropped
+        :return: True if table exists
         :rtype: bool
         """
-        if not self.table_exists(name): raise lmdb_TableMissing(name)
-        table = self.table(name)
-        for index in table.indexes: table.delete_index(index)
-        db = self._env.open_db(name.encode())
-        try:
-            with self._env.begin(write=True) as txn:
-                txn.drop(db, delete)
-        except Exception:
-            print("~~ exception :: transaction aborted ~~")
-            print_stack()
-            txn.abort()
-        return True
-
-    def index_exists(self, table_name, index_name):
-        key = '_{}_{}'.format(table_name, index_name)
-        return key in self.tables
-
-    def indexes(self, name):
-        """
-        indexes - public method to get the indexes for a table
-        """
-        return self.table(name).indexes
+        return name in self._tables
 
     def table(self, name):
         """
-        table - public method to get a handle for a table
+        Return a reference to a table with a given name, creating first if it doesn't exist
+        
+        :param name: Name of table
+        :type name: str
+        :return: Reference to table
+        :rtype: Table
         """
         if name not in self._tables:
             self._tables[name] = Table(self._env, name)
         return self._tables[name]
 
-    def table_exists(self, table_name):
-        return table_name in self.tables
-
     @property
     def tables(self):
         """
-        tables - public property to list tables in the database
+        PROPERTY - Generate a list of names of the tables associated with this database
+        
+        :getter: Returns a list of table names
+        :type: list
         """
         result = []
         with self._env.begin() as txn:
@@ -203,13 +151,13 @@ class Index(object):
         self._conf['key'] = self._conf['key'].encode()
         self._integer = conf.get('integerkey', False)
         if func[0] == '!':
-            self._func = anonymous(func[1:])
+            self._func = _anonymous(func[1:])
         else:
             fmt = self._int_tpl if self._integer else self._str_tpl
-            self._func = anonymous(fmt.format(func))
+            self._func = _anonymous(fmt.format(func))
         self._db = self._env.open_db(**self._conf)
 
-    def count(self, txn):
+    def count(self, txn=None):
         """Count the number of items currently present in this index
         
         :param txn: Is an open Transaction 
@@ -217,7 +165,12 @@ class Index(object):
         :return: The number if items in the index
         :rtype: int
         """
-        return txn.stat(self._db).get('entries', 0)
+        def entries():
+            return txn.stat(self._db).get('entries', 0)
+        if txn:
+            return entries()
+        with self._env.begin() as txn:
+            return entries()
 
     def cursor(self, txn):
         """Return a cursor into the current index
@@ -297,141 +250,102 @@ class Table(object):
         self._indexes = {}
         self._db = self._env.open_db(name.encode())
         for index in self.indexes:
-            key = ''.join(['@', self._index_name(index)]).encode()
+            key = ''.join(['@', _index_name(self, index)]).encode()
             with self._env.begin() as txn:
                 doc = loads(bytes(txn.get(key)))
                 self._indexes[index] = Index(self._env, index, doc['func'], doc['conf'])
 
-    def _index_name(self, name):
-        """Generate the name of the object in which to store index records
-        
-        :param name: The name of the table
-        :type name: str
-        :return: A string representation of the full table name 
-        :rtype: str
-        """
-        return '_{}_{}'.format(self._name, name)
-
-    def count_index(self, name):
-        """Count the number of entries in a named index
-        
-        :param name: The name of the index
-        :type name: str
-        :return: The current number of entires in the index
-        :rtype: int
-        """
-        with self._env.begin() as txn:
-            return self._indexes[name].count(txn)
-
-    def create_index(self, name, func, duplicates=False, integer=False):
-        """Create a new index for on this table
-        
-        :param name: The name of the index to create
-        :type name: str
-        :param func: A specification of the index, !<function>|<field name>
-        :type func: str
-        :param duplicates: Whether this index will allow duplicate keys
-        :type duplicates: boolean
-        :param integer: Whether this index has integer keys (or string keys)
-        :type integer: boolean
-        :return: True if the index was created
-        :rtype: boolean
-        """
-        conf = {
-            'key': self._index_name(name),
-            'integerkey': integer,
-            'integerdup': duplicates,
-            'dupsort': duplicates,
-            'create': True,
-        }
-        self._indexes[name] = Index(self._env, name, func, conf)
-        try:
-            with self._env.begin(write=True) as txn:
-                key = ''.join(['@', self._index_name(name)]).encode()
-                val = dumps({'conf': conf, 'func': func}).encode()
-                txn.put(key, val)
-                #self._indexes[name].reindex()
-                return True
-        except Exception:
-            print("~~ exception :: transaction aborted ~~")
-            print_stack()
-            txn.abort()
-            return False
-
-    def delete_index(self, name):
-        """Delete the names index
-        
-        :param name: The name of the index
-        :type name: str
-        :return: True if the index was deleted successfully
-        :rtype: boolean
-        """
-        db = self._env.open_db(self._index_name(name).encode())
-        try:
-            with self._env.begin(write=True) as txn:
-                txn.drop(db, True)
-                txn.delete(''.join(['@', self._index_name(name)]).encode())
-        except Exception:
-            print("~~ exception :: transaction aborted ~~")
-            print_stack()
-            txn.abort()
-
-    def append(self, doc):
+    def append(self, record):
         """Append a new record to this table
         
-        :param doc: The record to append
-        :type doc: dict
+        :param record: The record to append
+        :type record: dict
         :return: True if the record was successfully appended
         :rtype: bool
         """
         key = str(UUID())
-        doc['_id'] = key
+        record['_id'] = key
         try:
             with self._env.begin(write=True) as txn:
-                txn.put(key.encode(), dumps(doc).encode(), db=self._db, append=True)
+                txn.put(key.encode(), dumps(record).encode(), db=self._db, append=True)
                 for name in self._indexes:
-                    self._indexes[name].put(txn, key, doc)
-        except Exception:
-            print("~~ exception :: transaction aborted ~~")
-            print_stack()
+                    self._indexes[name].put(txn, key, record)
+            return True
+        except Exception as e:
             txn.abort()
+            print("~~ exception :: transaction aborted ~~")
+            print(str(e))
+            return False
 
-    @property
-    def count(self):
-        """Recover the number of entries in this table
-        
-        :return: The number of entries
-        :rtype: int
-        """
-        with self._env.begin() as txn:
-            return txn.stat(self._db).get('entries', 0)
 
-    def delete(self, ids):
+    def delete(self, keys):
         """Delete a record from this table
         
-        :param ids: A list of database keys to delete
-        :type ids: list
+        :param keys: A list of database keys to delete
+        :type keys: list
         :return: True if all the ids were deleted successfully
         :rtype: bool
         """
         try:
             with self._env.begin(write=True) as txn:
-                for _id in ids:
+                for _id in keys:
                     key = _id.encode()
                     doc = loads(bytes(txn.get(key, db=self._db)))
                     txn.delete(key, db=self._db)
                     for name in self._indexes:
                         self._indexes[name].delete(txn, key, doc)
-        except Exception:
-            print("~~ exception :: transaction aborted ~~")
-            print_stack()
+                return True
+        except Exception as e:
             txn.abort()
+            print("~~ exception :: transaction aborted ~~")
+            print(str(e))
+            return False
 
-    def find(self, index_name=None, max=None):
+    def drop(self, delete=True):
+        """Drop this tablex and all it's indecies
+
+        :param delete: Whether we delete the table after removing all items
+        :type delete: bool
+        :return: True if the table was successfully dropped
+        :rtype: bool
+        """
+        for name in self.indexes:
+            self.unindex(name)
+
+        try:
+            with self._env.begin(write=True) as txn:
+                txn.drop(self._db, delete)
+            return True
+        except Exception as e:
+            txn.abort()
+            print("~~ exception :: transaction aborted ~~")
+            print(str(e))
+            return False
+
+    def empty(self):
+        """Clear all records from the current table
+
+        :return: True if the table was cleared
+        :rtype: bool
+        """
+        return self.drop(False)
+
+    def exists(self, name):
+        """
+        See whether an index already exists or not
+
+        :param name: Name of the index
+        :type name: str
+        :return: True if index already exists
+        :rtype: bool
+        """
+        return _index_name(self, name) in self._tables
+
+    def find(self, name=None, max=None):
         """Find all records either sequentiall or based on an index
         
-        :param index_name: The name of the index to use [OR use natural order] 
-        :type index_name: str
+        :param name: The name of the index to use [OR use natural order] 
+        :type name: str
         :param max: The maximum number of records to return
         :type max: int
         :return: The records that were located
@@ -439,7 +353,7 @@ class Table(object):
         """
         results = []
         with self._env.begin() as txn:
-            if not index_name:
+            if not name:
                 with Cursor(self._db, txn) as cursor:
                     if not cursor.first(): return
                     count = 0
@@ -449,9 +363,9 @@ class Table(object):
                         count += 1
                         if not cursor.next() or (max and count>=max): break
             else:
-                if index_name not in self._indexes:
-                    raise lmdb_IndexMissing(index_name)
-                index = self._indexes[index_name]
+                if name not in self._indexes:
+                    raise lmdb_IndexMissing(name)
+                index = self._indexes[name]
                 with index.cursor(txn) as cursor:
                     if not cursor.first(): return
                     count = 0
@@ -464,15 +378,74 @@ class Table(object):
 
         return results
 
+    def index(self, name, func=None, duplicates=False, integer=False):
+        """Return a reference for a names index, or create if not available
+
+        :param name: The name of the index to create
+        :type name: str
+        :param func: A specification of the index, !<function>|<field name>
+        :type func: str
+        :param duplicates: Whether this index will allow duplicate keys
+        :type duplicates: bool
+        :param integer: Whether this index has integer keys (or string keys)
+        :type integer: bool
+        :return: A reference to the index, created index, or None if index creation fails
+        :rtype: Index
+        """
+        if name not in self._indexes:
+            conf = {
+                'key': _index_name(self, name),
+                'integerkey': integer,
+                'integerdup': duplicates,
+                'dupsort': duplicates,
+                'create': True,
+            }
+            try:
+                with self._env.begin(write=True) as txn:
+                    key = ''.join(['@', _index_name(self, name)]).encode()
+                    val = dumps({'conf': conf, 'func': func}).encode()
+                    txn.put(key, val)
+                    # TODO: Implement reindex function
+                    # self._indexes[name].reindex()
+            except Exception as e:
+                txn.abort()
+                print("~~ exception :: transaction aborted ~~")
+                print(str(e))
+                return None
+            self._indexes[name] = Index(self._env, name, func, conf)
+
+        return self._indexes[name]
+
+    def unindex(self, name):
+        """Delete the named index
+
+        :param name: The name of the index
+        :type name: str
+        :return: True if the index was deleted successfully
+        :rtype: boolean
+        """
+        db = self._env.open_db(_index_name(self, name).encode())
+        try:
+            with self._env.begin(write=True) as txn:
+                txn.drop(db, True)
+                txn.delete(''.join(['@', _index_name(self, name)]).encode())
+            return True
+        except Exception as e:
+            txn.abort()
+            print("~~ exception :: transaction aborted ~~")
+            print(str(e))
+            return False
+
     @property
     def indexes(self):
-        """Recover a list of indexes for this table
+        """
+        PROPERTY - Recover a list of indexes for this table
 
-        :return: The indexes for this table
-        :rtype: list
+        :getter: The indexes for this table
+        :type: list
         """
         results = []
-        index_name = self._index_name('')
+        index_name = _index_name(self, '')
         pos = len(index_name)
         with self._env.begin() as txn:
             db = self._env.open_db()
@@ -485,8 +458,18 @@ class Table(object):
                         results.append(name[pos:])
         return results
 
+    @property
+    def records(self):
+        """
+        PROPERTY - Recover the number of records in this table
 
-def debug(self, msg):
+        :getter: Record count
+        :type: int
+        """
+        with self._env.begin() as txn:
+            return txn.stat(self._db).get('entries', 0)
+
+def _debug(self, msg):
     """Display a debug message with current line number and function name
 
     :param self: A reference to the object calling this routine
@@ -500,7 +483,7 @@ def debug(self, msg):
     print("{}: #{} - {}".format(name, line, msg))
 
 
-def anonymous(text):
+def _anonymous(text):
     """An anonymous function used to generate functions for database indecies
 
     :param text: The body of the function call to generate
@@ -509,6 +492,16 @@ def anonymous(text):
     scope = {}
     exec('def func{0}'.format(text), scope)
     return scope['func']
+
+def _index_name(self, name):
+    """Generate the name of the object in which to store index records
+
+    :param name: The name of the table
+    :type name: str
+    :return: A string representation of the full table name 
+    :rtype: str
+    """
+    return '_{}_{}'.format(self._name, name)
 
 
 class lmdb_TableExists(Exception):
