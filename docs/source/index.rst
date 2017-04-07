@@ -7,9 +7,10 @@ Welcome to pymamba's documentation!
 ===================================
 
 Contents:
+  pymamba - Python Database Library
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
 
 Indices and tables
 ==================
@@ -25,3 +26,4 @@ mamba module
     :members:
     :undoc-members:
     :show-inheritance:
+
