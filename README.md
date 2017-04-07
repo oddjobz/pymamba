@@ -3,8 +3,6 @@
 <img src='https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master' alt='Coverage Status' />
 </p>
 
-![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master)
-
 # PyMamba
 
 PyMamba is a Python database library which utilises LMDB as a storage engine. It's name is derived from the
