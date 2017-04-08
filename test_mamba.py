@@ -257,3 +257,32 @@ class UnitTests(unittest.TestCase):
         self.assertTrue('by_name' in table.indexes)
         table.unindex('by_name')
         self.assertFalse('by_name' in table.indexes)
+
+    def test_30_count_with_txn(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        table.index('by_age_name', ['age:int', 'name'])
+        table.index('by_name', 'name')
+        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        self.generate_data(db, self._tb_name)
+        with db._env.begin() as txn:
+            index = table.index('by_name')
+            self.assertTrue(index.count(txn), 7)
+
+    def test_31_index_get(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        table.index('by_age_name', ['age:int', 'name'])
+        table.index('by_name', 'name')
+        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        self.generate_data(db, self._tb_name)
+        with db._env.begin() as txn:
+            index = table.index('by_name')
+            _id = index.get(txn, {'name': 'Squizzey'})
+            doc = table.get(_id)
+        self.assertTrue(doc['age'], 3000)
+        self.assertTrue(doc['name'], 'Squizzey')
+        with self.assertRaises(lmdb_NotFound):
+            table.get('')

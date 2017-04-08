@@ -234,7 +234,7 @@ class Index(object):
         :return: The record recovered from the index
         :rtype: str
         """
-        return txn.drop(self._db, delete=False)
+        return txn.drop(self._db, delete=True)
 
     def get(self, txn, record):
         """
@@ -366,6 +366,22 @@ class Table(object):
         """
         return name in self._indexes
 
+    def get(self, key):
+        """
+        Get a single record based on it's key
+        
+        :param key: The _id of the record to get
+        :type key: str
+        :return: The requested record
+        :rtype: dict
+        :raises: lmdb_NotFound if record does not exist
+        """
+        try:
+            with self._env.begin() as txn:
+                return loads(bytes(txn.get(key, db=self._db)))
+        except Exception as e:
+            raise lmdb_NotFound(e)
+
     def find(self, name=None, max=None):
         """
         Find all records either sequentiall or based on an index
@@ -455,13 +471,12 @@ class Table(object):
         :raises: lmdb_Aborted on error
         :raises: lmdb_IndexMissing if the index does not exist
         """
-        if name not in self.indexes:
+        if name not in self._indexes:
             raise lmdb_IndexMissing()
 
-        db = self._env.open_db(_index_name(self, name).encode())
         try:
             with self._env.begin(write=True) as txn:
-                txn.drop(db, True)
+                self._indexes[name].drop(txn)
                 txn.delete(''.join(['@', _index_name(self, name)]).encode())
         except Exception as e:
             txn.abort()
