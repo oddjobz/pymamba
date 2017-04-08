@@ -15,7 +15,7 @@ table = db.table('people')   # Open (/create) a table
 
 print('>> Index table by name and age')
 table.index('by_name', 'name')
-table.index('by_age', 'age', integer=True, duplicates=True)
+table.index('by_age', 'age:int', integer=True, duplicates=True)
 
 print('>> Adding data')
 for item in data:
@@ -35,7 +35,7 @@ for record in table.find('by_age'):
     print('{age} - {name} in ascending order of age'.format(**record))
 
 print('>> Scanning on name index with filter')
-for record in table.find('by_name', filter=lambda doc: doc['age']>40):
+for record in table.find('by_name', filter=lambda doc: doc['age'] > 40):
     print('{name} is {age} years old (filtered age>40)'.format(**record))
 
 table.drop(True)
