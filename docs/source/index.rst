@@ -7,7 +7,7 @@ Welcome to pymamba's documentation!
 ===================================
 
 Contents:
-  pymamba - Python Database Library
+  pymamba - Python Database Library 0.11
 
 .. toctree::
    :maxdepth: 4

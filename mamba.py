@@ -53,7 +53,7 @@ playing with.
 ##############################################################################
 from lmdb import Cursor, Environment
 from ujson import loads, dumps
-from sys import _getframe
+from sys import _getframe, maxsize
 from uuid import uuid1 as UUID
 from traceback import print_stack
 
@@ -304,9 +304,9 @@ class Table(object):
                 for name in self._indexes:
                     self._indexes[name].put(txn, key, record)
 
-        except Exception as e:
+        except Exception as error:
             txn.abort()
-            raise lmdb_Aborted(e)
+            raise error
 
     def delete(self, keys):
         """
@@ -316,6 +316,8 @@ class Table(object):
         :type keys: list
         :raises: lmdb_Aborted on failure
         """
+        if not isinstance(keys, list):
+            keys = [keys]
         try:
             with self._env.begin(write=True) as txn:
                 for _id in keys:
@@ -324,9 +326,9 @@ class Table(object):
                     txn.delete(key, db=self._db)
                     for name in self._indexes:
                         self._indexes[name].delete(txn, key, doc)
-        except Exception as e:
+        except Exception as error:
             txn.abort()
-            raise lmdb_Aborted(e)
+            raise error
 
     def drop(self, delete=True):
         """
@@ -342,9 +344,9 @@ class Table(object):
         try:
             with self._env.begin(write=True) as txn:
                 txn.drop(self._db, delete)
-        except Exception as e:
+        except Exception as error:
             txn.abort()
-            raise lmdb_Aborted(e)
+            raise error
 
     def empty(self):
         """
@@ -374,51 +376,46 @@ class Table(object):
         :type key: str
         :return: The requested record
         :rtype: dict
-        :raises: lmdb_NotFound if record does not exist
         """
-        try:
-            with self._env.begin() as txn:
-                return loads(bytes(txn.get(key, db=self._db)))
-        except Exception as e:
-            raise lmdb_NotFound(e)
+        with self._env.begin() as txn:
+            return loads(bytes(txn.get(key, db=self._db)))
 
-    def find(self, name=None, max=None):
+    def find(self, index=None, filter=None, limit=maxsize):
         """
         Find all records either sequentiall or based on an index
         
-        :param name: The name of the index to use [OR use natural order] 
-        :type name: str
-        :param max: The maximum number of records to return
-        :type max: int
-        :return: The records that were located
-        :rtype: list
+        :param index: The name of the index to use [OR use natural order] 
+        :type index: str
+        :param filter: An optional filter expression
+        :type filter: function
+        :param limit: The maximum number of records to return
+        :type limit: int
+        :return: The next record (generator)
+        :rtype: dict
         """
-        results = []
         with self._env.begin() as txn:
-            if not name:
-                with Cursor(self._db, txn) as cursor:
-                    if not cursor.first(): return []
-                    count = 0
-                    while True:
-                        doc = cursor.value()
-                        results.append(loads(bytes(doc)))
-                        count += 1
-                        if not cursor.next() or (max and count>=max): break
+            if not index:
+                cursor = Cursor(self._db, txn)
             else:
-                if name not in self._indexes:
-                    raise lmdb_IndexMissing(name)
-                index = self._indexes[name]
-                with index.cursor(txn) as cursor:
-                    if not cursor.first(): return []
-                    count = 0
-                    while True:
-                        doc = cursor.value()
-                        doc = loads(bytes(txn.get(doc, db=self._db)))
-                        results.append(doc)
-                        count += 1
-                        if not cursor.next() or (max and count>=max): break
+                if index not in self._indexes:
+                    raise lmdb_IndexMissing(index)
+                index = self._indexes[index]
+                cursor = index.cursor(txn)
+            count = 0
+            first = True
+            while count < limit:
+                if not (cursor.first() if first else cursor.next()):
+                    break
+                first = False
+                record = cursor.value()
+                if index:
+                    record = txn.get(record, db=self._db)
+                record = loads(bytes(record))
+                if filter and not filter(record): continue
+                yield record
+                count += 1
 
-        return results
+            cursor.close()
 
     def index(self, name, func=None, duplicates=False, integer=False):
         """
@@ -444,11 +441,7 @@ class Table(object):
                 'dupsort': duplicates,
                 'create': True,
             }
-            try:
-                self._indexes[name] = Index(self._env, name, func, conf)
-            except Exception as e:
-                raise lmdb_Aborted(e)
-
+            self._indexes[name] = Index(self._env, name, func, conf)
             try:
                 with self._env.begin(write=True) as txn:
                     if func == '__killme__': key = nothing
@@ -457,9 +450,9 @@ class Table(object):
                     txn.put(key, val)
                     # TODO: Implement reindex function
                     # self._indexes[name].reindex()
-            except Exception as e:
+            except Exception as error:
                 txn.abort()
-                raise e
+                raise error
 
         return self._indexes[name]
 
@@ -480,9 +473,9 @@ class Table(object):
                 if name == '__killme__': key = nothing
                 self._indexes[name].drop(txn)
                 txn.delete(''.join(['@', _index_name(self, name)]).encode())
-        except Exception as e:
+        except Exception as error:
             txn.abort()
-            raise e
+            raise error
 
     @property
     def indexes(self):

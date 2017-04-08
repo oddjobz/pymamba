@@ -73,8 +73,7 @@ class UnitTests(unittest.TestCase):
         for item in data:
             table.append(item)
             people[item['name']] = item
-        results = table.find()
-        for item in results:
+        for item in table.find():
             key = item.get('name', None)
             self.assertIsNotNone(key)
             if key:
@@ -84,9 +83,8 @@ class UnitTests(unittest.TestCase):
                     self.assertEqual(person['age'], item['age'])
                     self.assertEqual(person['_id'], item['_id'])
 
-        results = table.find('by_name')
         last = ''
-        for item in results:
+        for item in table.find('by_name'):
             key = item.get('name', None)
             self.assertIsNotNone(key)
             if key:
@@ -98,9 +96,8 @@ class UnitTests(unittest.TestCase):
                     self.assertGreaterEqual(person['name'], last)
                     last = person['name']
 
-        results = table.find('by_age')
         last = 0
-        for item in results:
+        for item in table.find('by_age'):
             key = item.get('name', None)
             self.assertIsNotNone(key)
             if key:
@@ -116,18 +113,15 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(table.index('by_name').count(), len(data))
         self.assertEqual(table.index('by_age').count(), len(data))
 
-        table.delete([results[0]['_id']])
-        table.delete([results[1]['_id']])
-        table.delete([results[2]['_id']])
+        for record in table.find('by_age', limit=3):
+            table.delete(record['_id'])
 
         self.assertEqual(table.records, len(data) - 3)
         self.assertEqual(table.index('by_name').count(), len(data) - 3)
         self.assertEqual(table.index('by_age').count(), len(data) - 3)
 
-        results = table.find('by_age')
         last = 0
-        for item in results:
-            #print(item)
+        for item in table.find('by_age'):
             key = item.get('name', None)
             self.assertIsNotNone(key)
             if key:
@@ -151,11 +145,11 @@ class UnitTests(unittest.TestCase):
         ages = [doc['age'] for doc in self._data]
         ages.sort()
         ages.reverse()
-        results = table.find('by_age_name')
-        for row in results:
+
+        for row in table.find('by_age_name'):
             self.assertEqual(row['age'], ages.pop())
 
-        with self.assertRaises(lmdb_Aborted):
+        with self.assertRaises(SyntaxError):
             table.index('broken', '!')
         table.drop(True)
 
@@ -217,7 +211,7 @@ class UnitTests(unittest.TestCase):
         table.index('by_age', 'age:int', integer=True, duplicates=True)
         self.generate_data(db, self._tb_name)
         table._indexes = 10
-        with self.assertRaises(lmdb_Aborted):
+        with self.assertRaises(TypeError):
             table.append({'_id': -1})
 
     def test_27_check_index_exception(self):
@@ -227,7 +221,7 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        with self.assertRaises(lmdb_Aborted):
+        with self.assertRaises(TypeError):
             table.index('by_name', f)
 
 
@@ -238,14 +232,14 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        with self.assertRaises(lmdb_Aborted):
+        with self.assertRaises(AttributeError):
             table.delete([f])
 
     def test_29_check_drop_exception(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        with self.assertRaises(lmdb_Aborted):
+        with self.assertRaises(TypeError):
             table._db = None
             table.drop()
 
@@ -287,10 +281,8 @@ class UnitTests(unittest.TestCase):
             doc = table.get(_id)
         self.assertTrue(doc['age'], 3000)
         self.assertTrue(doc['name'], 'Squizzey')
-        with self.assertRaises(lmdb_NotFound):
-            table.get('')
         with self.assertRaises(lmdb_IndexMissing):
-            table.find('fred', 'fred')
+            list(table.find('fred', 'fred'))
 
         with self.assertRaises(NameError):
             table.index('__killme__', '__killme__')
@@ -298,3 +290,20 @@ class UnitTests(unittest.TestCase):
         table.index('__killme__', 'name')
         with self.assertRaises(NameError):
             table.unindex('__killme__')
+
+    def test_32_filters(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        table.index('by_age_name', ['age:int', 'name'])
+        table.index('by_name', 'name')
+        self.generate_data(db, self._tb_name)
+        result = list(table.find(filter=lambda doc: doc['age'] == 3000))[0]
+        self.assertEqual(result['age'], 3000)
+        self.assertEqual(result['name'], 'Squizzey')
+        result = list(table.find('by_name', filter=lambda doc: doc['age'] == 21))[0]
+        self.assertEqual(result['age'], 21)
+        self.assertEqual(result['name'], 'Gareth Bult')
+        result = list(table.find('by_name', filter=lambda doc: doc['name'] == 'John Doe'))[0]
+        self.assertEqual(result['age'], 40)
+        self.assertEqual(result['name'], 'John Doe')
