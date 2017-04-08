@@ -155,6 +155,8 @@ class UnitTests(unittest.TestCase):
         for row in results:
             self.assertEqual(row['age'], ages.pop())
 
+        with self.assertRaises(lmdb_Aborted):
+            table.index('broken', '!')
         table.drop(True)
 
     def test_21_table_reopen(self):
@@ -228,6 +230,7 @@ class UnitTests(unittest.TestCase):
         with self.assertRaises(lmdb_Aborted):
             table.index('by_name', f)
 
+
     def test_28_check_delete_exception(self):
 
         class f(object):
@@ -286,3 +289,12 @@ class UnitTests(unittest.TestCase):
         self.assertTrue(doc['name'], 'Squizzey')
         with self.assertRaises(lmdb_NotFound):
             table.get('')
+        with self.assertRaises(lmdb_IndexMissing):
+            table.find('fred', 'fred')
+
+        with self.assertRaises(NameError):
+            table.index('__killme__', '__killme__')
+
+        table.index('__killme__', 'name')
+        with self.assertRaises(NameError):
+            table.unindex('__killme__')
