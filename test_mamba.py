@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 
 import unittest
-from mamba import Database, _debug
+from mamba import Database, _debug, \
+    lmdb_Aborted, lmdb_IndexExists, lmdb_IndexMissing, lmdb_IndexExists,\
+    lmdb_NotFound, lmdb_TableExists, lmdb_TableMissing
 from subprocess import call
 
 class UnitTests(unittest.TestCase):
@@ -203,3 +205,55 @@ class UnitTests(unittest.TestCase):
         table.empty()
         table = db.table(self._tb_name)
         self.assertEqual(table.records, 0)
+
+    def test_26_check_append_exception(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        table.index('by_age_name', ['age:int', 'name'])
+        table.index('by_name', 'name')
+        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        self.generate_data(db, self._tb_name)
+        table._indexes = 10
+        with self.assertRaises(lmdb_Aborted):
+            table.append({'_id': -1})
+
+    def test_27_check_index_exception(self):
+
+        class f(object):
+            pass
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        with self.assertRaises(lmdb_Aborted):
+            table.index('by_name', f)
+
+    def test_28_check_delete_exception(self):
+
+        class f(object):
+            pass
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        with self.assertRaises(lmdb_Aborted):
+            table.delete([f])
+
+    def test_29_check_drop_exception(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        with self.assertRaises(lmdb_Aborted):
+            table._db = None
+            table.drop()
+
+    def test_29_check_unindex_exception(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        with self.assertRaises(lmdb_IndexMissing):
+            table.unindex('fred')
+
+        table.index('by_name', 'name')
+        self.assertTrue('by_name' in table.indexes)
+        table.unindex('by_name')
+        self.assertFalse('by_name' in table.indexes)

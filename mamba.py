@@ -294,23 +294,19 @@ class Table(object):
         
         :param record: The record to append
         :type record: dict
-        :return: True if the record was successfully appended
-        :rtype: bool
+        :raises: lmdb_Aborted if transaction fails
         """
-        key = str(UUID())
-        record['_id'] = key
         try:
+            key = str(UUID())
+            record['_id'] = key
             with self._env.begin(write=True) as txn:
                 txn.put(key.encode(), dumps(record).encode(), db=self._db, append=True)
                 for name in self._indexes:
                     self._indexes[name].put(txn, key, record)
-            return True
+
         except Exception as e:
             txn.abort()
-            print("~~ exception :: transaction aborted ~~")
-            print(str(e))
-            return False
-
+            raise lmdb_Aborted(e)
 
     def delete(self, keys):
         """
@@ -318,8 +314,7 @@ class Table(object):
         
         :param keys: A list of database keys to delete
         :type keys: list
-        :return: True if all the ids were deleted successfully
-        :rtype: bool
+        :raises: lmdb_Aborted on failure
         """
         try:
             with self._env.begin(write=True) as txn:
@@ -329,12 +324,9 @@ class Table(object):
                     txn.delete(key, db=self._db)
                     for name in self._indexes:
                         self._indexes[name].delete(txn, key, doc)
-                return True
         except Exception as e:
             txn.abort()
-            print("~~ exception :: transaction aborted ~~")
-            print(str(e))
-            return False
+            raise lmdb_Aborted(e)
 
     def drop(self, delete=True):
         """
@@ -342,8 +334,7 @@ class Table(object):
 
         :param delete: Whether we delete the table after removing all items
         :type delete: bool
-        :return: True if the table was successfully dropped
-        :rtype: bool
+        :raises: lmdb_Aborted on failure
         """
         for name in self.indexes:
             self.unindex(name)
@@ -351,12 +342,9 @@ class Table(object):
         try:
             with self._env.begin(write=True) as txn:
                 txn.drop(self._db, delete)
-            return True
         except Exception as e:
             txn.abort()
-            print("~~ exception :: transaction aborted ~~")
-            print(str(e))
-            return False
+            raise lmdb_Aborted(e)
 
     def empty(self):
         """
@@ -430,6 +418,7 @@ class Table(object):
         :type integer: bool
         :return: A reference to the index, created index, or None if index creation fails
         :rtype: Index
+        :raises: lmdb_Aborted on error
         """
         if name not in self._indexes:
             conf = {
@@ -440,6 +429,11 @@ class Table(object):
                 'create': True,
             }
             try:
+                self._indexes[name] = Index(self._env, name, func, conf)
+            except Exception as e:
+                raise lmdb_Aborted(e)
+
+            try:
                 with self._env.begin(write=True) as txn:
                     key = ''.join(['@', _index_name(self, name)]).encode()
                     val = dumps({'conf': conf, 'func': func}).encode()
@@ -448,10 +442,7 @@ class Table(object):
                     # self._indexes[name].reindex()
             except Exception as e:
                 txn.abort()
-                print("~~ exception :: transaction aborted ~~")
-                print(str(e))
-                return None
-            self._indexes[name] = Index(self._env, name, func, conf)
+                raise lmdb_Aborted(e)
 
         return self._indexes[name]
 
@@ -461,20 +452,20 @@ class Table(object):
 
         :param name: The name of the index
         :type name: str
-        :return: True if the index was deleted successfully
-        :rtype: boolean
+        :raises: lmdb_Aborted on error
+        :raises: lmdb_IndexMissing if the index does not exist
         """
+        if name not in self.indexes:
+            raise lmdb_IndexMissing()
+
         db = self._env.open_db(_index_name(self, name).encode())
         try:
             with self._env.begin(write=True) as txn:
                 txn.drop(db, True)
                 txn.delete(''.join(['@', _index_name(self, name)]).encode())
-            return True
         except Exception as e:
             txn.abort()
-            print("~~ exception :: transaction aborted ~~")
-            print(str(e))
-            return False
+            raise lmdb_Aborted(e)
 
     @property
     def indexes(self):
@@ -570,4 +561,7 @@ class lmdb_IndexMissing(Exception):
 class lmdb_NotFound(Exception):
     """Exception - expected record was not found"""
     pass
+
+class lmdb_Aborted(Exception):
+    """Exception - transaction did not complete"""
 
