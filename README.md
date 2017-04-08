@@ -1,7 +1,7 @@
 # PyMamba
 
-[![Build Status](https://travis-ci.org/oddjobz/pymamba.svg?branch=master&v=8)](https://travis-ci.org/oddjobz/pymamba)
-[![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master&v=8)](https://coveralls.io/github/oddjobz/pymamba?branch=master)
+[![Build Status](https://travis-ci.org/oddjobz/pymamba.svg?branch=master&v=9)](https://travis-ci.org/oddjobz/pymamba)
+[![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master&v=9)](https://coveralls.io/github/oddjobz/pymamba?branch=master)
 
 PyMamba is a Python database library which utilises LMDB as a storage engine. It's name is derived from the
 *Black Mamba*, the fastest snake on the planet. Typically PyMamba is a number of orders of magnitude
@@ -17,7 +17,7 @@ See the API here: [https://pymamba.linux.co.uk](https://pymamba.linux.co.uk)
 
 ```python
 #!/usr/bin/python3
-from mamba import Database
+from mamba import Database, _debug
 #
 print(">> Define some arbitrary data")
 data = [
@@ -37,7 +37,7 @@ table.index('by_age', 'age', integer=True, duplicates=True)
 
 print('>> Adding data')
 for item in data:
-    if not table.append(item): print("%% ERROR")
+    table.append(item)
 print("Count=", table.records)
 
 print('>> Scanning table sequentially')
@@ -51,6 +51,10 @@ for record in table.find('by_name'):
 print('>> Scanning table in age order [numerical index]')
 for record in table.find('by_age'):
     print('{age} - {name} in ascending order of age'.format(**record))
+
+print('>> Scanning on name index with filter')
+for record in table.find('by_name', filter=lambda doc: doc['age']>40):
+    print('{name} is {age} years old (filtered age>40)'.format(**record))
 
 table.drop(True)
 db.close()
