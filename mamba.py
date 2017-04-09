@@ -468,7 +468,6 @@ class Table(object):
             self._indexes[name] = Index(self._env, name, func, conf)
             try:
                 with self._env.begin(write=True) as txn:
-                    if func == '__killme__': key = nothing
                     key = ''.join(['@', _index_name(self, name)]).encode()
                     val = dumps({'conf': conf, 'func': func}).encode()
                     txn.put(key, val)
@@ -493,7 +492,6 @@ class Table(object):
 
         try:
             with self._env.begin(write=True) as txn:
-                if name == '__killme__': key = nothing
                 self._indexes[name].drop(txn)
                 txn.delete(''.join(['@', _index_name(self, name)]).encode())
         except Exception as error:

@@ -284,13 +284,6 @@ class UnitTests(unittest.TestCase):
         with self.assertRaises(lmdb_IndexMissing):
             list(table.find('fred', 'fred'))
 
-        with self.assertRaises(NameError):
-            table.index('__killme__', '__killme__')
-
-        table.index('__killme__', 'name')
-        with self.assertRaises(NameError):
-            table.unindex('__killme__')
-
     def test_32_filters(self):
 
         db = Database(self._db_name)
