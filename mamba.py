@@ -1,24 +1,15 @@
-""" This is the current implementation of "mamba" which is a database layout
-that sites directly on top of LMDB. Currently it's *much* faster than
-Mongo, but currently incomplete and untested .. but it's great for 
-playing with.
+"""
+PyMamba is a database schema that sits on top of the LMDB storage engine. It provides a
+higher level of functionality than is provided by the RAW LMDB API, primarily the ability
+to transparently handle indexes, and the ability to transparently read and write Python
+variables (including list/dict structures). Currently it's *much* faster than Mongo, but 
+not feature complete and not exhaustively tested in the real world.
 """
 ##############################################################################
 # TODO: We need an index-aware record update routine
-# TODO: We need a search routine that can handle an index an a filter
-# TODO: convert to use generators for search routines
-# Test Coverage
 # TODO: Index. !function
-# TODO: Index.count - with txn
-# TODO: Index.drop
-# TODO: Index.get
-# TODO: Exception on Table.append
-# TODO: Exception on Table.delete
-# TODO: Exception on Table.drop
-# TODO: Table.find Exception with missing index
-# TODO: Table.index Exception writing meta
-# TODO: Table.unindex Exception
-#
+# TODO: add reindex function
+# TODO: add search on index keys (lower,upper)
 ##############################################################################
 #
 # MIT License
@@ -179,7 +170,6 @@ class Index(object):
                 fmt += self._int_t if typ == 'int' else self._str_t
                 names.append(fld)
             fmt = '(k): return '+fmt
-            #print(fmt.format(*names))
             self._func = _anonymous(fmt.format(*names))
         self._db = self._env.open_db(**self._conf)
 
@@ -236,6 +226,14 @@ class Index(object):
         """
         return txn.drop(self._db, delete=True)
 
+    def empty(self, txn):
+        """
+        Empty the current index of all records
+        
+        :param txn: Is an open Transaction 
+        """
+        return txn.drop(self._db, delete=False)
+
     def get(self, txn, record):
         """
         Read a single record from the index
@@ -262,7 +260,33 @@ class Index(object):
         :return: True if the record was written successfully
         :rtype: boolean
         """
-        return txn.put(self._func(record), key.encode(), db=self._db)
+        return txn.put(self._func(record), key.encode(), dupdata=True, db=self._db)
+
+    def reindex(self, db):
+        """
+        Reindex the current index, rec
+        
+        :param db: A handle to the database table to index
+        :type db: database handle
+        :return: Number of index entries created
+        :rtype: int
+        """
+        count = 0
+        with self._env.begin(write=True) as txn:
+            self.empty(txn)
+            try:
+                with Cursor(db, txn) as cursor:
+                    if cursor.first():
+                        while True:
+                            record = loads(bytes(cursor.value()))
+                            if not self.put(txn, record['_id'], record):
+                                raise lmdb_WriteFail
+                            if not cursor.next(): break
+                            count += 1
+            except Exception as error:
+                txn.abort()
+                raise error
+        return count
 
 
 class Table(object):
@@ -449,7 +473,7 @@ class Table(object):
                     val = dumps({'conf': conf, 'func': func}).encode()
                     txn.put(key, val)
                     # TODO: Implement reindex function
-                    # self._indexes[name].reindex()
+                self._indexes[name].reindex(self._db)
             except Exception as error:
                 txn.abort()
                 raise error
@@ -462,7 +486,6 @@ class Table(object):
 
         :param name: The name of the index
         :type name: str
-        :raises: lmdb_Aborted on error
         :raises: lmdb_IndexMissing if the index does not exist
         """
         if name not in self._indexes:
@@ -575,3 +598,5 @@ class lmdb_NotFound(Exception):
 class lmdb_Aborted(Exception):
     """Exception - transaction did not complete"""
 
+class lmdb_WriteFail(Exception):
+    """Exception - write failed"""

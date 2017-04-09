@@ -307,3 +307,23 @@ class UnitTests(unittest.TestCase):
         result = list(table.find('by_name', filter=lambda doc: doc['name'] == 'John Doe'))[0]
         self.assertEqual(result['age'], 40)
         self.assertEqual(result['name'], 'John Doe')
+
+
+    def test_33_reindex(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        self.generate_data(db, self._tb_name)
+        by_age_name = table.index('by_age_name', ['age:int', 'name'])
+        by_name = table.index('by_name', 'name')
+        by_age = table.index('by_age', 'age:int', integer=True, duplicates=True)
+        self.assertEqual(by_age_name.count(), 7)
+        self.assertEqual(by_name.count(), 7)
+        self.assertEqual(by_age.count(), 7)
+        by_age_name.reindex(table._db)
+        by_name.reindex(table._db)
+        by_age.reindex(table._db)
+        self.assertEqual(by_age_name.count(), 7)
+        self.assertEqual(by_name.count(), 7)
+        self.assertEqual(by_age.count(), 7)
+
