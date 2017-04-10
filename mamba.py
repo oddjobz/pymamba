@@ -6,10 +6,13 @@ variables (including list/dict structures). Currently it's *much* faster than Mo
 not feature complete and not exhaustively tested in the real world.
 """
 ##############################################################################
+# TODO: Compound key search (origin, day, hour)
 # TODO: We need an index-aware record update routine
 # TODO: Index. !function
-# TODO: add reindex function
 # TODO: add search on index keys (lower,upper)
+# TODO: only index values, i.e. hold partial indexes for rows with given attr
+# FIXME: "drop" should wrap everything inside one transaction
+# FIXME: "index" should wrap the "Index" call inside the txn
 ##############################################################################
 #
 # MIT License
@@ -45,8 +48,7 @@ not feature complete and not exhaustively tested in the real world.
 from lmdb import Cursor, Environment
 from ujson import loads, dumps
 from sys import _getframe, maxsize
-from uuid import uuid1 as UUID
-from traceback import print_stack
+from uuid import uuid1 as uuid
 
 class Database(object):
     """
@@ -57,18 +59,23 @@ class Database(object):
     :param conf: Any additional or custom options for this environment
     :type conf: dict  
     """
-    _config = {
-        'map_size': 1024*1024*1024 * 2,
+    _debug = False
+    _conf = {
+        'map_size': 1024*1024*1024*2,
         'subdir': True,
         'metasync': False,
         'sync': True,
-        'max_dbs': 256,
-        'writemap': True
+        'lock': True,
+        'max_dbs': 64,
+        'writemap': True,
+        'map_async': True
     }
-    def __init__(self, name, config={}):
-        _config = dict(self._config, **config.get('env', {}))
+    DICT = {}
+
+    def __init__(self, name, conf=None):
+        conf = dict(self._conf, **conf.get('env', {})) if conf else self._conf
         self._tables = {}
-        self._env = Environment(name, **_config)
+        self._env = Environment(name, **conf)
         self._db = self._env.open_db()
 
     def __del__(self):
@@ -78,9 +85,9 @@ class Database(object):
         """
         Close the current database
         """
-        if not self._env: return
-        self._env.close()
-        self._env = None
+        if self._env:
+            self._env.close()
+            self._env = None
 
     def exists(self, name):
         """
@@ -125,52 +132,28 @@ class Database(object):
                             break
         return result
 
-
 class Index(object):
     """
-    Representation of a table index created one per index when the table and it's indexes are opened.
+    Mapping for table indecies, this is version #2 with a much simplified indexing scheme.
     
     :param env: An LMDB Environment object
     :type env: Environment
     :param name: The name of the index we're working with
     :type name: str
-    :param func: Can be a function used to generate index keys, or a field name
+    :param func: Is a Python format string that specified the index layout
     :type func: str
     :param conf: Configuration options for this index
     :type conf: dict
-     
-    .. note:: if **func** begins with a **!** it is taken to be a function, otherwise
-        it func is treated as a field name. The field type is dictated by the settings
-        supplied in **conf**.
+
     """
     _debug = False
-    _str_t = 'str(k["{}"]).encode()'
-    _int_t = 'k["{}"].to_bytes(8,"big",signed=False)'
 
     def __init__(self, env, name, func, conf):
         self._env = env
         self._name = name
         self._conf = conf
         self._conf['key'] = self._conf['key'].encode()
-        self._integer = conf.get('integerkey', False)
-        if func[0] == '!':
-            self._func = _anonymous(func[1:])
-        else:
-            if not isinstance(func, list):
-                func = [func]
-            fmt = ''
-            names = []
-            for item in func:
-                if ':' in item:
-                    fld, typ = item.split(':')
-                else:
-                    fld, typ = (item, str)
-                if fmt:
-                    fmt += "+b'|'+"
-                fmt += self._int_t if typ == 'int' else self._str_t
-                names.append(fld)
-            fmt = '(k): return '+fmt
-            self._func = _anonymous(fmt.format(*names))
+        self._func = _anonymous('(r): return "{}".format(**r).encode()'.format(func))
         self._db = self._env.open_db(**self._conf)
 
     def count(self, txn=None):
@@ -270,6 +253,7 @@ class Index(object):
         :type db: database handle
         :return: Number of index entries created
         :rtype: int
+        :raises: lmdb_WriteFail on write error
         """
         count = 0
         with self._env.begin(write=True) as txn:
@@ -279,10 +263,10 @@ class Index(object):
                     if cursor.first():
                         while True:
                             record = loads(bytes(cursor.value()))
-                            if not self.put(txn, record['_id'], record):
-                                raise lmdb_WriteFail
-                            if not cursor.next(): break
+                            if not self.put(txn, record['_id'], record): raise WriteFail
                             count += 1
+                            if not cursor.next():
+                                break
             except Exception as error:
                 txn.abort()
                 raise error
@@ -312,25 +296,32 @@ class Table(object):
                 doc = loads(bytes(txn.get(key)))
                 self._indexes[index] = Index(self._env, index, doc['func'], doc['conf'])
 
-    def append(self, record):
+    def append(self, record, txn=None):
         """
         Append a new record to this table
         
         :param record: The record to append
         :type record: dict
-        :raises: lmdb_Aborted if transaction fails
+        :param txn: An open transaction
+        :type txn: Transaction
         """
-        try:
-            key = str(UUID())
-            record['_id'] = key
-            with self._env.begin(write=True) as txn:
+        def worker():
+            try:
+                key = str(uuid())
+                record['_id'] = key
                 txn.put(key.encode(), dumps(record).encode(), db=self._db, append=True)
                 for name in self._indexes:
                     self._indexes[name].put(txn, key, record)
 
-        except Exception as error:
-            txn.abort()
-            raise error
+            except Exception as error:
+                txn.abort()
+                raise error
+
+        if txn:
+            worker()
+        else:
+            with self._env.begin(write=True) as txn:
+                worker()
 
     def delete(self, keys):
         """
@@ -338,21 +329,20 @@ class Table(object):
         
         :param keys: A list of database keys to delete
         :type keys: list
-        :raises: lmdb_Aborted on failure
         """
         if not isinstance(keys, list):
             keys = [keys]
-        try:
-            with self._env.begin(write=True) as txn:
+        with self._env.begin(write=True) as txn:
+            try:
                 for _id in keys:
                     key = _id.encode()
                     doc = loads(bytes(txn.get(key, db=self._db)))
                     txn.delete(key, db=self._db)
                     for name in self._indexes:
                         self._indexes[name].delete(txn, key, doc)
-        except Exception as error:
-            txn.abort()
-            raise error
+            except Exception as error:
+                txn.abort()
+                raise error
 
     def drop(self, delete=True):
         """
@@ -360,17 +350,16 @@ class Table(object):
 
         :param delete: Whether we delete the table after removing all items
         :type delete: bool
-        :raises: lmdb_Aborted on failure
         """
         for name in self.indexes:
             self.unindex(name)
 
-        try:
-            with self._env.begin(write=True) as txn:
+        with self._env.begin(write=True) as txn:
+            try:
                 txn.drop(self._db, delete)
-        except Exception as error:
-            txn.abort()
-            raise error
+            except Exception as error:
+                txn.abort()
+                raise error
 
     def empty(self):
         """
@@ -404,14 +393,14 @@ class Table(object):
         with self._env.begin() as txn:
             return loads(bytes(txn.get(key, db=self._db)))
 
-    def find(self, index=None, filter=None, limit=maxsize):
+    def find(self, index=None, expression=None, limit=maxsize):
         """
-        Find all records either sequentiall or based on an index
+        Find all records either sequential or based on an index
         
         :param index: The name of the index to use [OR use natural order] 
         :type index: str
-        :param filter: An optional filter expression
-        :type filter: function
+        :param expression: An optional filter expression
+        :type expression: function
         :param limit: The maximum number of records to return
         :type limit: int
         :return: The next record (generator)
@@ -422,7 +411,7 @@ class Table(object):
                 cursor = Cursor(self._db, txn)
             else:
                 if index not in self._indexes:
-                    raise lmdb_IndexMissing(index)
+                    raise IndexMissing(index)
                 index = self._indexes[index]
                 cursor = index.cursor(txn)
             count = 0
@@ -435,7 +424,8 @@ class Table(object):
                 if index:
                     record = txn.get(record, db=self._db)
                 record = loads(bytes(record))
-                if filter and not filter(record): continue
+                if callable(expression) and not expression(record):
+                    continue
                 yield record
                 count += 1
 
@@ -466,16 +456,16 @@ class Table(object):
                 'create': True,
             }
             self._indexes[name] = Index(self._env, name, func, conf)
-            try:
-                with self._env.begin(write=True) as txn:
+            with self._env.begin(write=True) as txn:
+                try:
                     key = ''.join(['@', _index_name(self, name)]).encode()
                     val = dumps({'conf': conf, 'func': func}).encode()
                     txn.put(key, val)
-                    # TODO: Implement reindex function
-                self._indexes[name].reindex(self._db)
-            except Exception as error:
-                txn.abort()
-                raise error
+                except Exception as error:
+                    txn.abort()
+                    raise error
+            # TODO: include this in TXN
+            self._indexes[name].reindex(self._db)
 
         return self._indexes[name]
 
@@ -488,15 +478,16 @@ class Table(object):
         :raises: lmdb_IndexMissing if the index does not exist
         """
         if name not in self._indexes:
-            raise lmdb_IndexMissing()
+            raise IndexMissing()
 
-        try:
-            with self._env.begin(write=True) as txn:
+        with self._env.begin(write=True) as txn:
+            try:
                 self._indexes[name].drop(txn)
+                del self._indexes[name]
                 txn.delete(''.join(['@', _index_name(self, name)]).encode())
-        except Exception as error:
-            txn.abort()
-            raise error
+            except Exception as error:
+                txn.abort()
+                raise error
 
     @property
     def indexes(self):
@@ -531,6 +522,7 @@ class Table(object):
         with self._env.begin() as txn:
             return txn.stat(self._db).get('entries', 0)
 
+
 def _debug(self, msg):
     """
     Display a debug message with current line number and function name
@@ -540,22 +532,25 @@ def _debug(self, msg):
     :param msg: The message you wish to display
     :type msg: str
     """
-    if not self._debug: return
-    line = _getframe(1).f_lineno
-    name = _getframe(1).f_code.co_name
-    print("{}: #{} - {}".format(name, line, msg))
+    if hasattr(self, '_debug') and self._debug:
+        line = _getframe(1).f_lineno
+        name = _getframe(1).f_code.co_name
+        print("{}: #{} - {}".format(name, line, msg))
 
 
 def _anonymous(text):
     """
-    An anonymous function used to generate functions for database indecies
+    An function used to generate anonymous functions for database indecies
 
     :param text: The body of the function call to generate
     :type text: str
+    :return: Anonymous function to calculate key value
+    :rtype: function
     """
     scope = {}
     exec('def func{0}'.format(text), scope)
     return scope['func']
+
 
 def _index_name(self, name):
     """
@@ -569,32 +564,83 @@ def _index_name(self, name):
     return '_{}_{}'.format(self._name, name)
 
 
-class lmdb_TableExists(Exception):
+class TableExists(Exception):
     """Exception - database table already exists"""
     pass
 
 
-class lmdb_IndexExists(Exception):
+class IndexExists(Exception):
     """Exception - index already exists"""
     pass
 
 
-class lmdb_TableMissing(Exception):
+class TableMissing(Exception):
     """Exception - database table does not exist"""
     pass
 
 
-class lmdb_IndexMissing(Exception):
+class IndexMissing(Exception):
     """Exception - index does not exist"""
     pass
 
 
-class lmdb_NotFound(Exception):
+class NotFound(Exception):
     """Exception - expected record was not found"""
     pass
 
-class lmdb_Aborted(Exception):
+
+class Aborted(Exception):
     """Exception - transaction did not complete"""
 
-class lmdb_WriteFail(Exception):
+
+class WriteFail(Exception):
     """Exception - write failed"""
+
+
+    # class Index(object):
+
+#    """
+#    Representation of a table index created one per index when the table and it's indexes are opened.
+
+#    :param env: An LMDB Environment object
+#    :type env: Environment
+#    :param name: The name of the index we're working with
+#    :type name: str
+#    :param func: Can be a function used to generate index keys, or a field name
+#    :type func: str
+#    :param conf: Configuration options for this index
+#    :type conf: dict
+
+#    .. note:: if **func** begins with a **!** it is taken to be a function, otherwise
+#        it func is treated as a field name. The field type is dictated by the settings
+#        supplied in **conf**.
+#    """
+#    _debug = False
+#    _str_t = 'str(k["{}"]).encode()'
+#    _int_t = 'k["{}"].to_bytes(8,"big",signed=False)'
+
+#    def __init__(self, env, name, func, conf):
+#        self._env = env
+#        self._name = name
+#        self._conf = conf
+#        self._conf['key'] = self._conf['key'].encode()
+#        self._integer = conf.get('integerkey', False)
+#        if func[0] == '!':
+#            self._func = _anonymous('(r): return "{}".format(**r).encode()'.format(func[1:]))
+#        else:
+#            if not isinstance(func, list):
+#                func = [func]
+#            fmt = ''
+#            names = []
+#            for item in func:
+#                if ':' in item:
+#                    fld, typ = item.split(':')
+#                else:
+#                    fld, typ = (item, str)
+#                if fmt:
+#                    fmt += "+b'|'+"
+#                fmt += self._int_t if typ == 'int' else self._str_t
+#                names.append(fld)
+#            fmt = '(k): return '+fmt
+#            self._func = _anonymous(fmt.format(*names))
+#        self._db = self._env.open_db(**self._conf)

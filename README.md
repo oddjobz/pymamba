@@ -32,8 +32,8 @@ db = Database("MyDatabase")  # Open (/create) a database
 table = db.table('people')   # Open (/create) a table
 
 print('>> Index table by name and age')
-table.index('by_name', 'name')
-table.index('by_age', 'age:int', integer=True, duplicates=True)
+table.index('by_name', '{name}')
+table.index('by_age', '{age:03}', integer=True, duplicates=True)
 
 print('>> Adding data')
 for item in data:
@@ -53,7 +53,7 @@ for record in table.find('by_age'):
     print('{age} - {name} in ascending order of age'.format(**record))
 
 print('>> Scanning on name index with filter')
-for record in table.find('by_name', filter=lambda doc: doc['age'] > 40):
+for record in table.find('by_name', expression=lambda doc: doc['age'] > 40):
     print('{name} is {age} years old (filtered age>40)'.format(**record))
 
 table.drop(True)
@@ -81,10 +81,10 @@ John Smith sorted alphabetically
 Squizzey sorted alphabetically
 >> Scanning table in age order [numerical index]
 0 - John Doe in ascending order of age
-21 - Gareth Bult in ascending order of age
-40 - John Smith in ascending order of age
-45 - Fred Bloggs in ascending order of age
 3000 - Squizzey in ascending order of age
+40 - John Smith in ascending order of age
+21 - Gareth Bult in ascending order of age
+45 - Fred Bloggs in ascending order of age
 >> Scanning on name index with filter
 Fred Bloggs is 45 years old (filtered age>40)
 Squizzey is 3000 years old (filtered age>40)

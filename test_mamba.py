@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 
 import unittest
-from mamba import Database, _debug, \
-    lmdb_Aborted, lmdb_IndexExists, lmdb_IndexMissing, lmdb_IndexExists,\
-    lmdb_NotFound, lmdb_TableExists, lmdb_TableMissing
+import lmdb
+from mamba import Database, _debug, IndexMissing
 from subprocess import call
+
 
 class UnitTests(unittest.TestCase):
 
@@ -12,13 +12,13 @@ class UnitTests(unittest.TestCase):
     _tb_name = 'demo1'
     _debug = True
     _data = [
-        {'name': 'Gareth Bult', 'age': 21},
-        {'name': 'Squizzey', 'age': 3000},
-        {'name': 'Fred Bloggs', 'age': 45},
-        {'name': 'John Doe', 'age': 40},
-        {'name': 'John Smith', 'age': 40},
-        {'name': 'Jim Smith', 'age': 40},
-        {'name': 'Gareth Bult1', 'age': 21}
+        {'name': 'Gareth Bult', 'age': 21, 'cat': 'A'},
+        {'name': 'Squizzey', 'age': 3000, 'cat': 'A'},
+        {'name': 'Fred Bloggs', 'age': 45, 'cat': 'A'},
+        {'name': 'John Doe', 'age': 40, 'cat': 'B'},
+        {'name': 'John Smith', 'age': 40, 'cat': 'B'},
+        {'name': 'Jim Smith', 'age': 40, 'cat': 'B'},
+        {'name': 'Gareth Bult1', 'age': 21, 'cat': 'B'}
     ]
 
     def setUp(self):
@@ -31,6 +31,12 @@ class UnitTests(unittest.TestCase):
         table = db.table(table_name)
         for row in self._data:
             table.append(row)
+
+    def generate_data2(self, db, table_name):
+        table = db.table(table_name)
+        with db._env.begin(write=True) as txn:
+            for row in self._data:
+                table.append(row, txn)
 
     def test_01_basic(self):
         db = Database(self._db_name)
@@ -47,8 +53,8 @@ class UnitTests(unittest.TestCase):
     def test_03_create_drop_index(self):
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        table.index('by_name', 'name')
-        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        table.index('by_name', '{name}')
+        table.index('by_age', '{age:03}', duplicates=True)
         self.assertEqual(table.indexes, ['by_age', 'by_name'])
         table.drop(True)
         self.assertEqual(db.tables, [])
@@ -68,8 +74,8 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        table.index('by_name', 'name')
-        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        table.index('by_name', '{name}')
+        table.index('by_age', '{age:03}', duplicates=True)
         for item in data:
             table.append(item)
             people[item['name']] = item
@@ -140,7 +146,7 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        table.index('by_age_name', ['age:int', 'name'])
+        table.index('by_age_name', '{age:03}{name}')
         self.generate_data(db, self._tb_name)
         ages = [doc['age'] for doc in self._data]
         ages.sort()
@@ -149,17 +155,17 @@ class UnitTests(unittest.TestCase):
         for row in table.find('by_age_name'):
             self.assertEqual(row['age'], ages.pop())
 
-        with self.assertRaises(SyntaxError):
-            table.index('broken', '!')
+        with self.assertRaises(lmdb.Error):
+            table.index('broken', '{')
         table.drop(True)
 
     def test_21_table_reopen(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        table.index('by_age_name', ['age:int', 'name'])
-        table.index('by_name', 'name')
-        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        table.index('by_age_name', '{age:03}{name}')
+        table.index('by_name', '{name}')
+        table.index('by_age', '{age:03}', duplicates=True)
         self.generate_data(db, self._tb_name)
         db.close()
         db = Database(self._db_name)
@@ -180,9 +186,9 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        table.index('by_age_name', ['age:int', 'name'])
-        table.index('by_name', 'name')
-        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        table.index('by_age_name', '{age:03}{name}')
+        table.index('by_name', '{name}')
+        table.index('by_age', '{age:03}', integer=True, duplicates=True)
         self.assertTrue(table.exists('by_name'))
         db.close()
         db = Database(self._db_name)
@@ -193,9 +199,9 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        table.index('by_age_name', ['age:int', 'name'])
-        table.index('by_name', 'name')
-        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        table.index('by_age_name', '{age:03}{name}')
+        table.index('by_name', '{name}')
+        table.index('by_age', '{age:03}', integer=True, duplicates=True)
         self.generate_data(db, self._tb_name)
         self.assertEqual(table.records, len(self._data))
         table.empty()
@@ -206,23 +212,23 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        table.index('by_age_name', ['age:int', 'name'])
-        table.index('by_name', 'name')
-        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        table.index('by_age_name', '{age:03}{name}')
+        table.index('by_name', '{name}')
+        table.index('by_age', '{age:03}', duplicates=True)
         self.generate_data(db, self._tb_name)
         table._indexes = 10
-        with self.assertRaises(TypeError):
+        with self.assertRaises(lmdb.Error):
             table.append({'_id': -1})
 
-    def test_27_check_index_exception(self):
+    #def test_27_check_index_exception(self):
 
-        class f(object):
-            pass
+    #    class f(object):
+    #        pass
 
-        db = Database(self._db_name)
-        table = db.table(self._tb_name)
-        with self.assertRaises(TypeError):
-            table.index('by_name', f)
+    #    db = Database(self._db_name)
+    #    table = db.table(self._tb_name)
+    #    with self.assertRaises(TypeError):
+    #        table.index('by_name', '{99}')
 
 
     def test_28_check_delete_exception(self):
@@ -232,14 +238,14 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        with self.assertRaises(AttributeError):
+        with self.assertRaises(lmdb.Error):
             table.delete([f])
 
     def test_29_check_drop_exception(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(lmdb.Error):
             table._db = None
             table.drop()
 
@@ -247,10 +253,10 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        with self.assertRaises(lmdb_IndexMissing):
+        with self.assertRaises(IndexMissing):
             table.unindex('fred')
 
-        table.index('by_name', 'name')
+        table.index('by_name', '{name}')
         self.assertTrue('by_name' in table.indexes)
         table.unindex('by_name')
         self.assertFalse('by_name' in table.indexes)
@@ -259,9 +265,9 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        table.index('by_age_name', ['age:int', 'name'])
-        table.index('by_name', 'name')
-        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        table.index('by_age_name', '{age:03}{name}')
+        table.index('by_name', '{name}')
+        table.index('by_age', '{age:03}', integer=True, duplicates=True)
         self.generate_data(db, self._tb_name)
         with db._env.begin() as txn:
             index = table.index('by_name')
@@ -271,9 +277,9 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        table.index('by_age_name', ['age:int', 'name'])
-        table.index('by_name', 'name')
-        table.index('by_age', 'age:int', integer=True, duplicates=True)
+        table.index('by_age_name', '{age:03}{name}')
+        table.index('by_name', '{name}')
+        table.index('by_age', '{age:03}', integer=True, duplicates=True)
         self.generate_data(db, self._tb_name)
         with db._env.begin() as txn:
             index = table.index('by_name')
@@ -281,23 +287,23 @@ class UnitTests(unittest.TestCase):
             doc = table.get(_id)
         self.assertTrue(doc['age'], 3000)
         self.assertTrue(doc['name'], 'Squizzey')
-        with self.assertRaises(lmdb_IndexMissing):
+        with self.assertRaises(IndexMissing):
             list(table.find('fred', 'fred'))
 
     def test_32_filters(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        table.index('by_age_name', ['age:int', 'name'])
-        table.index('by_name', 'name')
+        table.index('by_age_name', '{age:03}{name}')
+        table.index('by_name', '{name}')
         self.generate_data(db, self._tb_name)
-        result = list(table.find(filter=lambda doc: doc['age'] == 3000))[0]
+        result = list(table.find(expression=lambda doc: doc['age'] == 3000))[0]
         self.assertEqual(result['age'], 3000)
         self.assertEqual(result['name'], 'Squizzey')
-        result = list(table.find('by_name', filter=lambda doc: doc['age'] == 21))[0]
+        result = list(table.find('by_name', expression=lambda doc: doc['age'] == 21))[0]
         self.assertEqual(result['age'], 21)
         self.assertEqual(result['name'], 'Gareth Bult')
-        result = list(table.find('by_name', filter=lambda doc: doc['name'] == 'John Doe'))[0]
+        result = list(table.find('by_name', expression=lambda doc: doc['name'] == 'John Doe'))[0]
         self.assertEqual(result['age'], 40)
         self.assertEqual(result['name'], 'John Doe')
 
@@ -307,9 +313,9 @@ class UnitTests(unittest.TestCase):
         db = Database(self._db_name)
         table = db.table(self._tb_name)
         self.generate_data(db, self._tb_name)
-        by_age_name = table.index('by_age_name', ['age:int', 'name'])
-        by_name = table.index('by_name', 'name')
-        by_age = table.index('by_age', 'age:int', integer=True, duplicates=True)
+        by_age_name = table.index('by_age_name', '{age:03}{name}')
+        by_name = table.index('by_name', '{name}')
+        by_age = table.index('by_age', '{age:03}', duplicates=True)
         self.assertEqual(by_age_name.count(), 7)
         self.assertEqual(by_name.count(), 7)
         self.assertEqual(by_age.count(), 7)
@@ -319,4 +325,26 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(by_age_name.count(), 7)
         self.assertEqual(by_name.count(), 7)
         self.assertEqual(by_age.count(), 7)
+
+    def test_34_function_index(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        self.generate_data(db, self._tb_name)
+        table.index('by_compound', '!{cat}|{name}')
+
+        results = []
+        for doc in table.find('by_compound'):
+            results.append(doc['cat'])
+        self.assertEqual(results, ['A', 'A', 'A', 'B', 'B', 'B', 'B'])
+
+        table.empty()
+        table = db.table(self._tb_name)
+        self.generate_data2(db, self._tb_name)
+        table.index('by_compound', '!{cat}|{name}')
+
+        results = []
+        for doc in table.find('by_compound'):
+            results.append(doc['cat'])
+        self.assertEqual(results, ['A', 'A', 'A', 'B', 'B', 'B', 'B'])
 
