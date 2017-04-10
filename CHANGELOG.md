@@ -1,3 +1,25 @@
+#### Version 0.13
+
+* Added seek(index, record) - seek to the first matching record based on an index key
+
+  For example;
+```  
+table.index('by_compound', '{cat}|{name}')
+for doc in table.seek('by_compound', {'cat': 'A', 'name': 'Squizzey'}):
+    print(doc)
+```
+
+* Added range(index, lower, upper) - return all records with keys falling within the
+  limits set up (upper, lower)
+
+  For example;
+  
+```  
+table.index('by_compound', '{cat}|{name}')
+for doc in table.range('by_compound', {'cat': 'A', 'name': 'Squizzey'}, {'cat': 'B', 'name': 'Gareth Bult1'):
+    print(doc)
+```
+
 #### Version 0.12
 
 * Simplified the way indexes work, maintaining a second 'easy' method is no

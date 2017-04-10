@@ -188,7 +188,7 @@ class UnitTests(unittest.TestCase):
         table = db.table(self._tb_name)
         table.index('by_age_name', '{age:03}{name}')
         table.index('by_name', '{name}')
-        table.index('by_age', '{age:03}', integer=True, duplicates=True)
+        table.index('by_age', '{age:03}', duplicates=True)
         self.assertTrue(table.exists('by_name'))
         db.close()
         db = Database(self._db_name)
@@ -201,7 +201,7 @@ class UnitTests(unittest.TestCase):
         table = db.table(self._tb_name)
         table.index('by_age_name', '{age:03}{name}')
         table.index('by_name', '{name}')
-        table.index('by_age', '{age:03}', integer=True, duplicates=True)
+        table.index('by_age', '{age:03}', duplicates=True)
         self.generate_data(db, self._tb_name)
         self.assertEqual(table.records, len(self._data))
         table.empty()
@@ -267,7 +267,7 @@ class UnitTests(unittest.TestCase):
         table = db.table(self._tb_name)
         table.index('by_age_name', '{age:03}{name}')
         table.index('by_name', '{name}')
-        table.index('by_age', '{age:03}', integer=True, duplicates=True)
+        table.index('by_age', '{age:03}', duplicates=True)
         self.generate_data(db, self._tb_name)
         with db._env.begin() as txn:
             index = table.index('by_name')
@@ -279,7 +279,7 @@ class UnitTests(unittest.TestCase):
         table = db.table(self._tb_name)
         table.index('by_age_name', '{age:03}{name}')
         table.index('by_name', '{name}')
-        table.index('by_age', '{age:03}', integer=True, duplicates=True)
+        table.index('by_age', '{age:03}', duplicates=True)
         self.generate_data(db, self._tb_name)
         with db._env.begin() as txn:
             index = table.index('by_name')
@@ -331,7 +331,7 @@ class UnitTests(unittest.TestCase):
         db = Database(self._db_name)
         table = db.table(self._tb_name)
         self.generate_data(db, self._tb_name)
-        table.index('by_compound', '!{cat}|{name}')
+        table.index('by_compound', '{cat}|{name}')
 
         results = []
         for doc in table.find('by_compound'):
@@ -341,10 +341,22 @@ class UnitTests(unittest.TestCase):
         table.empty()
         table = db.table(self._tb_name)
         self.generate_data2(db, self._tb_name)
-        table.index('by_compound', '!{cat}|{name}')
+        table.index('by_compound', '{cat}|{name}', duplicates=True)
 
         results = []
         for doc in table.find('by_compound'):
+            print(doc)
             results.append(doc['cat'])
         self.assertEqual(results, ['A', 'A', 'A', 'B', 'B', 'B', 'B'])
 
+        for i in table.seek('by_compound', {'cat': 'A', 'name': 'Squizzey'}):
+            self.assertEqual(i['age'], 3000)
+
+        for i in table.seek('by_compound', {'cat': 'B', 'name': 'John Doe'}):
+            self.assertEqual(i['age'], 40)
+
+        self.assertEqual(list(table.seek('by_compound', {'cat': 'C', 'name': 'Squizzey'})), [])
+
+        print("+++++")
+        for i in table.range('by_compound', {'cat': 'A', 'name': 'Squizzey'}, {'cat': 'B', 'name': 'Gareth Bult1'}):
+            print(i, doc)

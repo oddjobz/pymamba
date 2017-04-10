@@ -183,6 +183,40 @@ class Index(object):
         """
         return Cursor(self._db, txn)
 
+    def set_key(self, cursor, record):
+        """
+        Set the cursor to the first matching record
+        
+        :param cursor: An active cursor 
+        :type cursor: Cursor
+        :param record: A template record specifying the key to use
+        :type record: dict
+        """
+        cursor.set_key(self._func(record))
+
+    def set_range(self, cursor, record):
+        """
+        Set the cursor to the first matching record
+
+        :param cursor: An active cursor 
+        :type cursor: Cursor
+        :param record: A template record specifying the key to use
+        :type record: dict
+        """
+        cursor.set_range(self._func(record))
+
+    def set_next(self, cursor, record):
+        """
+        Find the next matching record lower than the key specified
+
+        :param cursor: An active cursor 
+        :type cursor: Cursor
+        :param record: A template record specifying the key to use
+        :type record: dict
+        """
+        cursor.next()
+        return cursor.key() <= self._func(record)
+
     def delete(self, txn, key, record):
         """
         Delete the selected record from the current index
@@ -393,6 +427,53 @@ class Table(object):
         with self._env.begin() as txn:
             return loads(bytes(txn.get(key, db=self._db)))
 
+    def seek(self, index, record):
+        """
+        Find all records matching the key in the specified index.
+        
+        :param index: Name of the index to seek on
+        :type index: str
+        :param record: A template record containing the fields to search on
+        :type record: dict
+        :return: The records with matching keys (generator)
+        :type: dict
+        """
+        with self._env.begin() as txn:
+            index = self._indexes[index]
+            with index.cursor(txn) as cursor:
+                index.set_key(cursor, record)
+                while True:
+                    if not cursor.key(): return
+                    record = txn.get(cursor.value(), db=self._db)
+                    yield loads(bytes(record))
+                    if not cursor.next_dup():
+                        return
+
+    def range(self, index, lower, upper):
+        """
+        Find all records with a key >= lower and <= upper
+        
+        :param index: The name of the index to search
+        :type index: str
+        :param lower: A template record containing the lower end of the range
+        :type lower: dict
+        :param upper: A template record containing the upper end of the range
+        :type upper: dict
+        :return: The records with keys witin the specified range (generator)
+        :type: dict
+        """
+        with self._env.begin() as txn:
+            index = self._indexes[index]
+            with index.cursor(txn) as cursor:
+                index.set_range(cursor, lower)
+                while True:
+                    if not cursor.key(): return
+                    record = txn.get(cursor.value(), db=self._db)
+                    yield loads(bytes(record))
+                    if not index.set_next(cursor, upper):
+                        return
+
+
     def find(self, index=None, expression=None, limit=maxsize):
         """
         Find all records either sequential or based on an index
@@ -431,7 +512,7 @@ class Table(object):
 
             cursor.close()
 
-    def index(self, name, func=None, duplicates=False, integer=False):
+    def index(self, name, func=None, duplicates=False):
         """
         Return a reference for a names index, or create if not available
 
@@ -450,8 +531,6 @@ class Table(object):
         if name not in self._indexes:
             conf = {
                 'key': _index_name(self, name),
-                'integerkey': integer,
-                'integerdup': duplicates,
                 'dupsort': duplicates,
                 'create': True,
             }
@@ -595,52 +674,3 @@ class Aborted(Exception):
 
 class WriteFail(Exception):
     """Exception - write failed"""
-
-
-    # class Index(object):
-
-#    """
-#    Representation of a table index created one per index when the table and it's indexes are opened.
-
-#    :param env: An LMDB Environment object
-#    :type env: Environment
-#    :param name: The name of the index we're working with
-#    :type name: str
-#    :param func: Can be a function used to generate index keys, or a field name
-#    :type func: str
-#    :param conf: Configuration options for this index
-#    :type conf: dict
-
-#    .. note:: if **func** begins with a **!** it is taken to be a function, otherwise
-#        it func is treated as a field name. The field type is dictated by the settings
-#        supplied in **conf**.
-#    """
-#    _debug = False
-#    _str_t = 'str(k["{}"]).encode()'
-#    _int_t = 'k["{}"].to_bytes(8,"big",signed=False)'
-
-#    def __init__(self, env, name, func, conf):
-#        self._env = env
-#        self._name = name
-#        self._conf = conf
-#        self._conf['key'] = self._conf['key'].encode()
-#        self._integer = conf.get('integerkey', False)
-#        if func[0] == '!':
-#            self._func = _anonymous('(r): return "{}".format(**r).encode()'.format(func[1:]))
-#        else:
-#            if not isinstance(func, list):
-#                func = [func]
-#            fmt = ''
-#            names = []
-#            for item in func:
-#                if ':' in item:
-#                    fld, typ = item.split(':')
-#                else:
-#                    fld, typ = (item, str)
-#                if fmt:
-#                    fmt += "+b'|'+"
-#                fmt += self._int_t if typ == 'int' else self._str_t
-#                names.append(fld)
-#            fmt = '(k): return '+fmt
-#            self._func = _anonymous(fmt.format(*names))
-#        self._db = self._env.open_db(**self._conf)

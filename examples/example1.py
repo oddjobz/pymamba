@@ -15,7 +15,7 @@ table = db.table('people')   # Open (/create) a table
 
 print('>> Index table by name and age')
 table.index('by_name', '{name}')
-table.index('by_age', '{age:03}', integer=True, duplicates=True)
+table.index('by_age', '{age:03}', duplicates=True)
 
 print('>> Adding data')
 for item in data:
