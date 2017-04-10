@@ -1,3 +1,10 @@
+#### Version 0.14
+
+* Fixed bug in empty to stop it deleting indecies
+* Added 'save' method to table for updating pre-existing items (index aware)
+* Added partial indexes, so only items where the key is not null are included in the index
+* Code coverage hits 100%
+
 #### Version 0.13
 
 * Added seek(index, record) - seek to the first matching record based on an index key

@@ -6,13 +6,7 @@ variables (including list/dict structures). Currently it's *much* faster than Mo
 not feature complete and not exhaustively tested in the real world.
 """
 ##############################################################################
-# TODO: Compound key search (origin, day, hour)
-# TODO: We need an index-aware record update routine
-# TODO: Index. !function
-# TODO: add search on index keys (lower,upper)
-# TODO: only index values, i.e. hold partial indexes for rows with given attr
-# FIXME: "drop" should wrap everything inside one transaction
-# FIXME: "index" should wrap the "Index" call inside the txn
+# TODO Items go here ...
 ##############################################################################
 #
 # MIT License
@@ -50,6 +44,7 @@ from ujson import loads, dumps
 from sys import _getframe, maxsize
 from uuid import uuid1 as uuid
 
+
 class Database(object):
     """
     Representation of a Database, this is the main API class
@@ -70,7 +65,6 @@ class Database(object):
         'writemap': True,
         'map_async': True
     }
-    DICT = {}
 
     def __init__(self, name, conf=None):
         conf = dict(self._conf, **conf.get('env', {})) if conf else self._conf
@@ -131,6 +125,7 @@ class Database(object):
                         if not cursor.next():
                             break
         return result
+
 
 class Index(object):
     """
@@ -277,34 +272,63 @@ class Index(object):
         :return: True if the record was written successfully
         :rtype: boolean
         """
-        return txn.put(self._func(record), key.encode(), dupdata=True, db=self._db)
+        try:
+            ikey = self._func(record)
+            return txn.put(ikey, key.encode(), db=self._db)
+        except KeyError as error:
+            return False
 
-    def reindex(self, db):
+    def save(self, txn, key, old, rec):
+        """
+        Save any changes to the keys for this record
+        
+        :param txn: An active transaction
+        :type txn: Transaction
+        :param key: The key for the record in question
+        :type key: str
+        :param old: The record in it's previous state 
+        :type old: dict
+        :param rec: The record in it's amended state
+        :type rec: dict
+        """
+        old_key = self._func(old)
+        new_key = self._func(rec)
+        if old_key != new_key:
+            txn.delete(old_key, key, db=self._db)
+            txn.put(new_key, key, db=self._db)
+
+    def reindex(self, db, txn=None):
         """
         Reindex the current index, rec
-        
+         
         :param db: A handle to the database table to index
         :type db: database handle
+        :param txn: An open transaction
+        :type txn: Transaction
         :return: Number of index entries created
         :rtype: int
-        :raises: lmdb_WriteFail on write error
         """
-        count = 0
-        with self._env.begin(write=True) as txn:
+        def worker():
+            count = 0
             self.empty(txn)
             try:
                 with Cursor(db, txn) as cursor:
                     if cursor.first():
                         while True:
                             record = loads(bytes(cursor.value()))
-                            if not self.put(txn, record['_id'], record): raise WriteFail
-                            count += 1
+                            if self.put(txn, record['_id'], record):
+                                count += 1
                             if not cursor.next():
                                 break
             except Exception as error:
                 txn.abort()
                 raise error
-        return count
+            return count
+
+        if txn:
+            return worker()
+        with self._env.begin(write=True) as txn:
+            return worker()
 
 
 class Table(object):
@@ -385,11 +409,13 @@ class Table(object):
         :param delete: Whether we delete the table after removing all items
         :type delete: bool
         """
-        for name in self.indexes:
-            self.unindex(name)
-
         with self._env.begin(write=True) as txn:
             try:
+                for name in self.indexes:
+                    if delete:
+                        self.unindex(name, txn)
+                    else:
+                        self._indexes[name].empty(txn)
                 txn.drop(self._db, delete)
             except Exception as error:
                 txn.abort()
@@ -415,69 +441,10 @@ class Table(object):
         """
         return name in self._indexes
 
-    def get(self, key):
-        """
-        Get a single record based on it's key
-        
-        :param key: The _id of the record to get
-        :type key: str
-        :return: The requested record
-        :rtype: dict
-        """
-        with self._env.begin() as txn:
-            return loads(bytes(txn.get(key, db=self._db)))
-
-    def seek(self, index, record):
-        """
-        Find all records matching the key in the specified index.
-        
-        :param index: Name of the index to seek on
-        :type index: str
-        :param record: A template record containing the fields to search on
-        :type record: dict
-        :return: The records with matching keys (generator)
-        :type: dict
-        """
-        with self._env.begin() as txn:
-            index = self._indexes[index]
-            with index.cursor(txn) as cursor:
-                index.set_key(cursor, record)
-                while True:
-                    if not cursor.key(): return
-                    record = txn.get(cursor.value(), db=self._db)
-                    yield loads(bytes(record))
-                    if not cursor.next_dup():
-                        return
-
-    def range(self, index, lower, upper):
-        """
-        Find all records with a key >= lower and <= upper
-        
-        :param index: The name of the index to search
-        :type index: str
-        :param lower: A template record containing the lower end of the range
-        :type lower: dict
-        :param upper: A template record containing the upper end of the range
-        :type upper: dict
-        :return: The records with keys witin the specified range (generator)
-        :type: dict
-        """
-        with self._env.begin() as txn:
-            index = self._indexes[index]
-            with index.cursor(txn) as cursor:
-                index.set_range(cursor, lower)
-                while True:
-                    if not cursor.key(): return
-                    record = txn.get(cursor.value(), db=self._db)
-                    yield loads(bytes(record))
-                    if not index.set_next(cursor, upper):
-                        return
-
-
     def find(self, index=None, expression=None, limit=maxsize):
         """
         Find all records either sequential or based on an index
-        
+
         :param index: The name of the index to use [OR use natural order] 
         :type index: str
         :param expression: An optional filter expression
@@ -512,6 +479,18 @@ class Table(object):
 
             cursor.close()
 
+    def get(self, key):
+        """
+        Get a single record based on it's key
+        
+        :param key: The _id of the record to get
+        :type key: str
+        :return: The requested record
+        :rtype: dict
+        """
+        with self._env.begin() as txn:
+            return loads(bytes(txn.get(key, db=self._db)))
+
     def index(self, name, func=None, duplicates=False):
         """
         Return a reference for a names index, or create if not available
@@ -522,8 +501,6 @@ class Table(object):
         :type func: str
         :param duplicates: Whether this index will allow duplicate keys
         :type duplicates: bool
-        :param integer: Whether this index has integer keys (or string keys)
-        :type integer: bool
         :return: A reference to the index, created index, or None if index creation fails
         :rtype: Index
         :raises: lmdb_Aborted on error
@@ -536,37 +513,109 @@ class Table(object):
             }
             self._indexes[name] = Index(self._env, name, func, conf)
             with self._env.begin(write=True) as txn:
-                try:
-                    key = ''.join(['@', _index_name(self, name)]).encode()
-                    val = dumps({'conf': conf, 'func': func}).encode()
-                    txn.put(key, val)
-                except Exception as error:
-                    txn.abort()
-                    raise error
-            # TODO: include this in TXN
-            self._indexes[name].reindex(self._db)
+                key = ''.join(['@', _index_name(self, name)]).encode()
+                val = dumps({'conf': conf, 'func': func}).encode()
+                txn.put(key, val)
+                self._indexes[name].reindex(self._db, txn)
 
         return self._indexes[name]
 
-    def unindex(self, name):
+    def save(self, record, txn=None):
+        """
+        Save an changes to a pre-existing record
+
+        :param record: The record to be saved
+        :type record: dict
+        :param txn: An open transaction
+        :type txn: Transaction
+        """
+
+        def worker():
+            key = record['_id'].encode()
+            old = loads(bytes(txn.get(key, db=self._db)))
+            txn.put(key, dumps(record).encode(), db=self._db)
+            for name in self._indexes:
+                self._indexes[name].save(txn, key, old, record)
+
+        if txn: worker()
+        else:
+            with self._env.begin(write=True) as txn:
+                worker()
+
+    def seek(self, index, record):
+        """
+        Find all records matching the key in the specified index.
+        
+        :param index: Name of the index to seek on
+        :type index: str
+        :param record: A template record containing the fields to search on
+        :type record: dict
+        :return: The records with matching keys (generator)
+        :type: dict
+        """
+        with self._env.begin() as txn:
+            index = self._indexes[index]
+            with index.cursor(txn) as cursor:
+                index.set_key(cursor, record)
+                while True:
+                    if not cursor.key():
+                        break
+                    record = txn.get(cursor.value(), db=self._db)
+                    yield loads(bytes(record))
+                    if not cursor.next_dup():
+                        break
+
+    def range(self, index, lower, upper):
+        """
+        Find all records with a key >= lower and <= upper
+        
+        :param index: The name of the index to search
+        :type index: str
+        :param lower: A template record containing the lower end of the range
+        :type lower: dict
+        :param upper: A template record containing the upper end of the range
+        :type upper: dict
+        :return: The records with keys witin the specified range (generator)
+        :type: dict
+        """
+        with self._env.begin() as txn:
+            index = self._indexes[index]
+            with index.cursor(txn) as cursor:
+                index.set_range(cursor, lower)
+                while True:
+                    if not cursor.key(): return
+                    record = txn.get(cursor.value(), db=self._db)
+                    yield loads(bytes(record))
+                    if not index.set_next(cursor, upper):
+                        return
+
+    def unindex(self, name, txn=None):
         """
         Delete the named index
 
+        :return: 
         :param name: The name of the index
         :type name: str
+        :param txn: An active transaction
+        :type txn: Transaction
         :raises: lmdb_IndexMissing if the index does not exist
         """
         if name not in self._indexes:
             raise IndexMissing()
 
-        with self._env.begin(write=True) as txn:
+        def worker():
             try:
                 self._indexes[name].drop(txn)
                 del self._indexes[name]
                 txn.delete(''.join(['@', _index_name(self, name)]).encode())
             except Exception as error:
-                txn.abort()
-                raise error
+                txn.abort(); raise error
+
+        if txn:
+            worker()
+        else:
+            with self._env.begin(write=True) as txn:
+                worker()
 
     @property
     def indexes(self):

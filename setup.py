@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='pymamba',
-    version='0.12',
+    version='0.14',
     packages=[''],
     url='https://github.com/oddjobz/pymamba',
     license='MIT',

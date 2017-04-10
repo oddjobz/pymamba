@@ -11,14 +11,23 @@ class UnitTests(unittest.TestCase):
     _db_name = 'unit-db'
     _tb_name = 'demo1'
     _debug = True
+    #_data = [
+    #    {'name': 'Gareth Bult', 'age': 21, 'cat': 'A'},
+    #    {'name': 'Squizzey', 'age': 3000, 'cat': 'A'},
+    #    {'name': 'Fred Bloggs', 'age': 45, 'cat': 'A'},
+    #    {'name': 'John Doe', 'age': 40, 'cat': 'B'},
+    #    {'name': 'John Smith', 'age': 40, 'cat': 'B'},
+    #    {'name': 'Jim Smith', 'age': 40, 'cat': 'B'},
+    #    {'name': 'Gareth Bult1', 'age': 21, 'cat': 'B'}
+    #]
     _data = [
-        {'name': 'Gareth Bult', 'age': 21, 'cat': 'A'},
+        {'name': 'Gareth Bult', 'age': 21, 'admin': True, 'cat': 'A'},
         {'name': 'Squizzey', 'age': 3000, 'cat': 'A'},
         {'name': 'Fred Bloggs', 'age': 45, 'cat': 'A'},
-        {'name': 'John Doe', 'age': 40, 'cat': 'B'},
+        {'name': 'John Doe', 'age': 40, 'admin': True, 'cat': 'B'},
         {'name': 'John Smith', 'age': 40, 'cat': 'B'},
         {'name': 'Jim Smith', 'age': 40, 'cat': 'B'},
-        {'name': 'Gareth Bult1', 'age': 21, 'cat': 'B'}
+        {'name': 'Gareth Bult1', 'age': 21, 'admin': True, 'cat': 'B'}
     ]
 
     def setUp(self):
@@ -61,22 +70,13 @@ class UnitTests(unittest.TestCase):
 
     def test_04_put_data(self):
 
-        data = [
-            {'name': 'Gareth Bult', 'age': 21},
-            {'name': 'Squizzey', 'age': 3000},
-            {'name': 'Fred Bloggs', 'age': 45},
-            {'name': 'John Doe', 'age': 40},
-            {'name': 'John Smith', 'age': 40},
-            {'name': 'Jim Smith', 'age': 40},
-            {'name': 'Gareth Bult1', 'age': 21}
-        ]
         people = {}
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
         table.index('by_name', '{name}')
         table.index('by_age', '{age:03}', duplicates=True)
-        for item in data:
+        for item in self._data:
             table.append(item)
             people[item['name']] = item
         for item in table.find():
@@ -115,16 +115,16 @@ class UnitTests(unittest.TestCase):
                     self.assertGreaterEqual(person['age'], last)
                     last = person['age']
 
-        self.assertEqual(table.records, len(data))
-        self.assertEqual(table.index('by_name').count(), len(data))
-        self.assertEqual(table.index('by_age').count(), len(data))
+        self.assertEqual(table.records, len(self._data))
+        self.assertEqual(table.index('by_name').count(), len(self._data))
+        self.assertEqual(table.index('by_age').count(), len(self._data))
 
         for record in table.find('by_age', limit=3):
             table.delete(record['_id'])
 
-        self.assertEqual(table.records, len(data) - 3)
-        self.assertEqual(table.index('by_name').count(), len(data) - 3)
-        self.assertEqual(table.index('by_age').count(), len(data) - 3)
+        self.assertEqual(table.records, len(self._data) - 3)
+        self.assertEqual(table.index('by_name').count(), len(self._data) - 3)
+        self.assertEqual(table.index('by_age').count(), len(self._data) - 3)
 
         last = 0
         for item in table.find('by_age'):
@@ -331,7 +331,8 @@ class UnitTests(unittest.TestCase):
         db = Database(self._db_name)
         table = db.table(self._tb_name)
         self.generate_data(db, self._tb_name)
-        table.index('by_compound', '{cat}|{name}')
+        table.index('by_compound', '{cat}|{name}', duplicates=True)
+        table.index('by_age', '{age:03}', duplicates=True)
 
         results = []
         for doc in table.find('by_compound'):
@@ -341,11 +342,9 @@ class UnitTests(unittest.TestCase):
         table.empty()
         table = db.table(self._tb_name)
         self.generate_data2(db, self._tb_name)
-        table.index('by_compound', '{cat}|{name}', duplicates=True)
 
         results = []
         for doc in table.find('by_compound'):
-            print(doc)
             results.append(doc['cat'])
         self.assertEqual(results, ['A', 'A', 'A', 'B', 'B', 'B', 'B'])
 
@@ -357,6 +356,34 @@ class UnitTests(unittest.TestCase):
 
         self.assertEqual(list(table.seek('by_compound', {'cat': 'C', 'name': 'Squizzey'})), [])
 
-        print("+++++")
-        for i in table.range('by_compound', {'cat': 'A', 'name': 'Squizzey'}, {'cat': 'B', 'name': 'Gareth Bult1'}):
-            print(i, doc)
+        lower = {'cat': 'A', 'name': 'Squizzey'}
+        upper = {'cat': 'B', 'name': 'Gareth Bult1'}
+        iter = table.range('by_compound', lower, upper)
+        results = list(iter)
+
+        self.assertEqual(results[0]['name'], 'Squizzey')
+        self.assertEqual(results[1]['name'], 'Gareth Bult1')
+
+        results[0]['name'] = '!Squizzey'
+        results[0]['age'] = 1
+        table.save(results[0])
+
+        self.assertEqual(list(table.find('by_compound'))[0]['name'], '!Squizzey')
+        self.assertEqual(list(table.find('by_age'))[0]['age'], 1)
+
+    def test_35_partial_index(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        self.generate_data(db, self._tb_name)
+        table.index('by_admin', '{admin}', duplicates=True)
+        try:
+            for doc in table.find('by_admin'):
+                print("> {admin}".format(**doc), doc)
+        except Exception as error:
+            self.fail('partial key failure')
+            raise error
+
+        self.assertEqual(table.index('by_admin').count(), 3)
+        with self.assertRaises(AttributeError):
+            table.unindex('by_admin', 123)
