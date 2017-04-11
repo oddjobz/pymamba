@@ -1,5 +1,5 @@
 from distutils.core import setup
-from pymamba import __version__
+from pymamba_version import __version__
 
 setup(
     name='pymamba',

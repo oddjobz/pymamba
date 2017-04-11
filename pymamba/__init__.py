@@ -43,8 +43,8 @@ from lmdb import Cursor, Environment
 from ujson import loads, dumps
 from sys import _getframe, maxsize
 from uuid import uuid1 as uuid
+from pymamba_version import __version__
 
-__version__ = "0.1.14"
 
 class Database(object):
     """
