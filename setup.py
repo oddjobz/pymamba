@@ -1,4 +1,4 @@
-from setuptools import setup
+from distutils.core import setup
 from pymamba import __version__
 
 setup(
