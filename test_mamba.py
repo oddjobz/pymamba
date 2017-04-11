@@ -2,7 +2,7 @@
 
 import unittest
 import lmdb
-from mamba import Database, _debug, IndexMissing
+from mamba import Database, _debug, xIndexMissing
 from subprocess import call
 
 
@@ -253,7 +253,7 @@ class UnitTests(unittest.TestCase):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        with self.assertRaises(IndexMissing):
+        with self.assertRaises(xIndexMissing):
             table.unindex('fred')
 
         table.index('by_name', '{name}')
@@ -287,7 +287,7 @@ class UnitTests(unittest.TestCase):
             doc = table.get(_id)
         self.assertTrue(doc['age'], 3000)
         self.assertTrue(doc['name'], 'Squizzey')
-        with self.assertRaises(IndexMissing):
+        with self.assertRaises(xIndexMissing):
             list(table.find('fred', 'fred'))
 
     def test_32_filters(self):

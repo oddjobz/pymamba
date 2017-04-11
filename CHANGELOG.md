@@ -1,11 +1,11 @@
-#### Version 0.14
+#### Version 0.1.4
 
 * Fixed bug in empty to stop it deleting indecies
 * Added 'save' method to table for updating pre-existing items (index aware)
 * Added partial indexes, so only items where the key is not null are included in the index
 * Code coverage hits 100%
 
-#### Version 0.13
+#### Version 0.1.3
 
 * Added seek(index, record) - seek to the first matching record based on an index key
 
@@ -27,7 +27,7 @@ for doc in table.range('by_compound', {'cat': 'A', 'name': 'Squizzey'}, {'cat': 
     print(doc)
 ```
 
-#### Version 0.12
+#### Version 0.1.2
 
 * Simplified the way indexes work, maintaining a second 'easy' method is no
   longer worthwhile with the new indexing interface. All indexes are now specified
@@ -53,7 +53,7 @@ for doc in table.range('by_compound', {'cat': 'A', 'name': 'Squizzey'}, {'cat': 
   Not the use of a sepatating character (|) to ensure separation between the variable 
   length alphanumeric key and the fixed length numeric key.
 
-#### Version 0.11
+#### Version 0.1.1
 
 * Re-implemented 'find' method for Table
   * Now returns a generator rather than a list

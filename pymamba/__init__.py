@@ -44,6 +44,7 @@ from ujson import loads, dumps
 from sys import _getframe, maxsize
 from uuid import uuid1 as uuid
 
+__version__ = "0.1.14"
 
 class Database(object):
     """
@@ -459,7 +460,7 @@ class Table(object):
                 cursor = Cursor(self._db, txn)
             else:
                 if index not in self._indexes:
-                    raise IndexMissing(index)
+                    raise xIndexMissing(index)
                 index = self._indexes[index]
                 cursor = index.cursor(txn)
             count = 0
@@ -601,7 +602,7 @@ class Table(object):
         :raises: lmdb_IndexMissing if the index does not exist
         """
         if name not in self._indexes:
-            raise IndexMissing()
+            raise xIndexMissing()
 
         def worker():
             try:
@@ -692,34 +693,34 @@ def _index_name(self, name):
     return '_{}_{}'.format(self._name, name)
 
 
-class TableExists(Exception):
+class xTableExists(Exception):
     """Exception - database table already exists"""
     pass
 
 
-class IndexExists(Exception):
+class xIndexExists(Exception):
     """Exception - index already exists"""
     pass
 
 
-class TableMissing(Exception):
+class xTableMissing(Exception):
     """Exception - database table does not exist"""
     pass
 
 
-class IndexMissing(Exception):
+class xIndexMissing(Exception):
     """Exception - index does not exist"""
     pass
 
 
-class NotFound(Exception):
+class xNotFound(Exception):
     """Exception - expected record was not found"""
     pass
 
 
-class Aborted(Exception):
+class xAborted(Exception):
     """Exception - transaction did not complete"""
 
 
-class WriteFail(Exception):
+class xWriteFail(Exception):
     """Exception - write failed"""
