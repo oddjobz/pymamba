@@ -26,5 +26,8 @@ setup(
 	    'Programming Language :: Python :: 3.5',
     ],
     keywords=['pymamba','database','LMDB'],
-    install_requires=['lmdb', 'ujson']
+    install_requires=[
+	'lmdb',
+        'ujson'
+    ]
 )
