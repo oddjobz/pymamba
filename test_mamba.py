@@ -2,7 +2,7 @@
 
 import unittest
 import lmdb
-from mamba import Database, _debug, xIndexMissing
+from pymamba import Database, _debug, xIndexMissing
 from subprocess import call
 
 
