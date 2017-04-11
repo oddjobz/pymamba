@@ -1,3 +1,8 @@
+#### Version 0.1.14
+
+* Switching to Pypi
+* You can now download this package with "pip", note however it will only work with Python3 for now.
+
 #### Version 0.1.4
 
 * Fixed bug in empty to stop it deleting indecies

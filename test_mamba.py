@@ -11,15 +11,6 @@ class UnitTests(unittest.TestCase):
     _db_name = 'unit-db'
     _tb_name = 'demo1'
     _debug = True
-    #_data = [
-    #    {'name': 'Gareth Bult', 'age': 21, 'cat': 'A'},
-    #    {'name': 'Squizzey', 'age': 3000, 'cat': 'A'},
-    #    {'name': 'Fred Bloggs', 'age': 45, 'cat': 'A'},
-    #    {'name': 'John Doe', 'age': 40, 'cat': 'B'},
-    #    {'name': 'John Smith', 'age': 40, 'cat': 'B'},
-    #    {'name': 'Jim Smith', 'age': 40, 'cat': 'B'},
-    #    {'name': 'Gareth Bult1', 'age': 21, 'cat': 'B'}
-    #]
     _data = [
         {'name': 'Gareth Bult', 'age': 21, 'admin': True, 'cat': 'A'},
         {'name': 'Squizzey', 'age': 3000, 'cat': 'A'},
