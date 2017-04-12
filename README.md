@@ -7,7 +7,7 @@
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=Y8KQE7TRJV6ZA)
 
 PyMamba is a Python library designed to turn the LMDB storage engine into a relatively 
-complete Database package for use in Python3 applications. In the spirit on the 
+complete Database package for use in Python3 applications. In the spirit of the 
 language title, this package is named after the fastest snake on the planet 
 (*Black Mamba*) as a nod to the speed of the LMDB storage engine we're leaning on.
 
