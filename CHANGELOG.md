@@ -1,4 +1,4 @@
-### Version 0.1.28
+### Version 0.1.29
 
 * _id no longer stored in record body (removes duplication)
 * Removes unnecessary decode in range
