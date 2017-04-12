@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/oddjobz/pymamba.svg?branch=master&v=16)](https://travis-ci.org/oddjobz/pymamba)
 [![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master&v=16)](https://coveralls.io/github/oddjobz/pymamba?branch=master)
 [![PyPI version](https://badge.fury.io/py/pymamba.svg)](https://badge.fury.io/py/pymamba)
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](Y8KQE7TRJV6ZA)
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=Y8KQE7TRJV6ZA)
 
 PyMamba is a Python library designed to turn the LMDB storage engine into a relatively 
 complete Database package for use in Python3 applications. In the spirit on the 
@@ -157,4 +157,4 @@ Name: John Doe             Age: 19
 There's a lot more to come, but so far it's looking pretty promising.
 On my workstation a for-loop based on a **find** yields around **200k** results per second, and an **append** yields around 30k new items per second. This seems to be fairly respectable for a high level language database and seems to be much faster than Mongo when used with either Python or Node.
 
-[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](Y8KQE7TRJV6ZA)
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=Y8KQE7TRJV6ZA)
