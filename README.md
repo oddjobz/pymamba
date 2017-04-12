@@ -108,9 +108,9 @@ the expression comes from a Python format string when supplied with the record i
 *dict* format. So you can't directly use a function to do *anything* with regards 
 to key generation, but you can do an awful lot with the 
 Python [format *mini-language*](https://docs.python.org/3.4/library/string.html#formatspec). 
-(and adding actual functions is relatively easy for anyone who can thing of a must-have use-case)
+(and adding actual functions is relatively easy for anyone who can think of a must-have use-case)
 
-So, once we have an index we can search using the index and indeed find records in 
+So, once we have an index we can search using the index and also find records in 
 order based on the index, so we can re-use *find* but this time give it an index to use;
 ```python
 >>> for doc in people.find('by_age_name'):
@@ -156,3 +156,10 @@ Name: John Doe             Age: 19
 ```
 There's a lot more to come, but so far it's looking pretty promising.
 On my workstation a for-loop based on a **find** yields around **200k** results per second, and an **append** yields around 30k new items per second. This seems to be fairly respectable for a high level language database and seems to be much faster than Mongo when used with either Python or Node.
+
+<form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
+<input type="hidden" name="cmd" value="_s-xclick">
+<input type="hidden" name="hosted_button_id" value="YBCG3496FRKAJ">
+<input type="image" src="https://www.paypalobjects.com/en_US/GB/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal – The safer, easier way to pay online!">
+<img alt="" border="0" src="https://www.paypalobjects.com/en_GB/i/scr/pixel.gif" width="1" height="1">
+</form>
