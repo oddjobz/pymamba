@@ -23,7 +23,7 @@ to deploy and maintain*)
 
 See the API here: [https://pymamba.linux.co.uk](https://pymamba.linux.co.uk)
 
-#### Features
+### Features
 
 * LMDB Memory mapped storage engine, arguably the *best* solution for small to medium sized databases
 * Data is mapped directly to Python objects (ujson) so you read and write *dict's*
@@ -32,7 +32,7 @@ See the API here: [https://pymamba.linux.co.uk](https://pymamba.linux.co.uk)
 * Everything is transactional with ACI[D] by default
 * LMDB provides multi-thread and multi-process access which defeats GIL limitations
 
-#### Examples
+### Examples
 
 This is an example of how to create a new database called *my-database*, then within 
 that database to create a table called *people*, then to add some people. 
@@ -87,7 +87,7 @@ Name: Joe Smith            Age: 22
 ```
 
 
-#### Indexing
+### Indexing
 Transparent indexes are a key part of any database system, and I struggled for a 
 while trying to decide which mechanism to use. On the one hand I wanted the 
 functionality of being able to index tables by compound fields and functions, and on 
@@ -129,7 +129,7 @@ Or we can look for a range of records;
 Name: Joe Smith            Age: 22
 Name: John Doe             Age: 19
 ```
-##### Updating Records
+### Updating Records
 We've already covered adding new records to the database, so that leaves us with
 updating and deleting records. How about this;
 ```python
