@@ -2,7 +2,7 @@
 
 import unittest
 import lmdb
-from pymamba import Database, _debug, xIndexMissing, xWriteFail
+from pymamba import Database, _debug, xIndexMissing
 from subprocess import call
 
 
@@ -211,17 +211,6 @@ class UnitTests(unittest.TestCase):
         table._indexes = 10
         with self.assertRaises(lmdb.Error):
             table.append({'_id': -1})
-
-    #def test_27_check_index_exception(self):
-
-    #    class f(object):
-    #        pass
-
-    #    db = Database(self._db_name)
-    #    table = db.table(self._tb_name)
-    #    with self.assertRaises(TypeError):
-    #        table.index('by_name', '{99}')
-
 
     def test_28_check_delete_exception(self):
 

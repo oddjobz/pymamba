@@ -44,7 +44,7 @@ from ujson import loads, dumps
 from sys import _getframe, maxsize
 from bson import ObjectId
 
-__version__ = '0.1.28'
+__version__ = '0.1.29'
 
 class Database(object):
     """
