@@ -25,7 +25,7 @@ See the API here: [https://pymamba.linux.co.uk](https://pymamba.linux.co.uk)
 
 ### Features
 
-* LMDB Memory mapped storage engine, arguably the *best* solution for small to medium sized databases
+* LMDB mmapped storage engine, arguably the *best* solution for small to medium DB's
 * Data is mapped directly to Python objects (ujson) so you read and write *dict's*
 * Transparent indexes are keyed by Python 'expression'
 * There is no schema, DDL, query language, just *Python*
