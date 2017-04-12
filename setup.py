@@ -1,5 +1,6 @@
-from distutils.core import setup
-from pymamba_version import __version__
+#from distutils.core import setup
+from setuptools import setup
+__version__ = '0.1.28'
 
 setup(
     name='pymamba',

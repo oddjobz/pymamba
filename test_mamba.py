@@ -2,7 +2,7 @@
 
 import unittest
 import lmdb
-from pymamba import Database, _debug, xIndexMissing
+from pymamba import Database, _debug, xIndexMissing, xWriteFail
 from subprocess import call
 
 
@@ -47,7 +47,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(db.tables, [])
         table = db.table(self._tb_name)
         self.assertEqual(db.tables, [self._tb_name])
-        table.drop(True)
+        db.drop(self._tb_name)
         self.assertEqual(db.tables, [])
 
     def test_03_create_drop_index(self):
@@ -56,7 +56,7 @@ class UnitTests(unittest.TestCase):
         table.index('by_name', '{name}')
         table.index('by_age', '{age:03}', duplicates=True)
         self.assertEqual(table.indexes, ['by_age', 'by_name'])
-        table.drop(True)
+        db.drop(self._tb_name)
         self.assertEqual(db.tables, [])
 
     def test_04_put_data(self):
@@ -130,7 +130,7 @@ class UnitTests(unittest.TestCase):
                     self.assertGreaterEqual(person['age'], last)
                     last = person['age']
 
-        table.drop(True)
+        db.drop(self._tb_name)
         self.assertEqual(db.tables, [])
 
     def test_20_compound_index(self):
@@ -148,7 +148,8 @@ class UnitTests(unittest.TestCase):
 
         with self.assertRaises(lmdb.Error):
             table.index('broken', '{')
-        table.drop(True)
+        #print(db.tables)
+        #db.drop(self._tb_name)
 
     def test_21_table_reopen(self):
 
@@ -355,6 +356,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(results[0]['name'], 'Squizzey')
         self.assertEqual(results[1]['name'], 'Gareth Bult1')
 
+        print(results[0])
         results[0]['name'] = '!Squizzey'
         results[0]['age'] = 1
         table.save(results[0])
@@ -378,3 +380,37 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(table.index('by_admin').count(), 3)
         with self.assertRaises(AttributeError):
             table.unindex('by_admin', 123)
+
+    def test_36_seek_one(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        self.generate_data(db, self._tb_name)
+        table.index('by_age', '{age:03}', duplicates=True)
+        doc = table.seek_one('by_age', {'age': 3000})
+        self.assertEqual(doc['age'], 3000)
+        self.assertEqual(doc['name'], 'Squizzey')
+
+    def test_37_drop_reuse(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        self.generate_data(db, self._tb_name)
+        db.drop(self._tb_name)
+        table = db.table(self._tb_name)
+        self.generate_data(db, self._tb_name)
+        table.index('by_age', '{age:03}', duplicates=True)
+        doc = table.seek_one('by_age', {'age': 3000})
+        self.assertEqual(doc['age'], 3000)
+        self.assertEqual(doc['name'], 'Squizzey')
+        for doc in table.find():
+            _id = doc['_id']
+            name = doc['name']
+            break
+        db.restructure(self._tb_name)
+        table = db.table(self._tb_name)
+        for doc in table.find():
+            self.assertEqual(doc['name'], name)
+            self.assertNotEqual(doc['_id'], _id)
+            break
+

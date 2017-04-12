@@ -1,6 +1,14 @@
+### Version 0.1.28
+
+* _id no longer stored in record body (removes duplication)
+* Removes unnecessary decode in range
+* Lots of misc bug fixes and exception fixes
+* New Readme
+* Added seek_one function
+
 #### Version 0.1.14
 
-* Switching to Pypi
+* Switching to PyPi
 * You can now download this package with "pip", note however it will only work with Python3 for now.
 
 #### Version 0.1.4

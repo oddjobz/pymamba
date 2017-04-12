@@ -42,9 +42,9 @@ not feature complete and not exhaustively tested in the real world.
 from lmdb import Cursor, Environment
 from ujson import loads, dumps
 from sys import _getframe, maxsize
-from uuid import uuid1 as uuid
-from pymamba_version import __version__
+from bson import ObjectId
 
+__version__ = '0.1.28'
 
 class Database(object):
     """
@@ -95,6 +95,45 @@ class Database(object):
         """
         return name in self.tables
 
+    def drop(self, name):
+        """
+        Drop a database table
+        
+        :param name: Name of table to drop
+        :type name: str
+        """
+        if name in self._tables:
+            self._tables[name].drop(True)
+        del self._tables[name]
+
+    def restructure(self, name):
+        """
+        Restructure a table, copy to a temporary table, then copy back. This will recreate the table
+        and all it's ID's but will retain the original indexes. (which it will regenerate)
+        
+        :param name: Name of the table to restructure
+        :type name: str
+        """
+        if name not in self.tables: raise xTableMissing
+        src = self._tables[name]
+        dst_name = '~'+name
+        if dst_name in self.tables: raise xTableExists
+        dst = self.table(dst_name)
+        with self._env.begin(write=True) as txn:
+            for doc in src.find():
+                dst.append(doc, txn)
+
+        try:
+            with self._env.begin(write=True) as txn:
+                src.empty(txn)
+                for doc in dst.find():
+                    src.append(doc, txn)
+                dst.drop(True, txn)
+                del self._tables[dst_name]
+        except Exception as error:
+            txn.abort()
+            raise error
+
     def table(self, name):
         """
         Return a reference to a table with a given name, creating first if it doesn't exist
@@ -109,7 +148,7 @@ class Database(object):
         return self._tables[name]
 
     @property
-    def tables(self):
+    def tables(self, all=False):
         """
         PROPERTY - Generate a list of names of the tables associated with this database
         
@@ -122,7 +161,8 @@ class Database(object):
                 if cursor.first():
                     while True:
                         name = cursor.key().decode()
-                        result.append(name)
+                        if name[0] not in ['_', '@'] and not all:
+                            result.append(name)
                         if not cursor.next():
                             break
         return result
@@ -234,10 +274,8 @@ class Index(object):
 
         :param txn: Is an open Transaction 
         :type txn: Transaction
-        :return: The record recovered from the index
-        :rtype: str
         """
-        return txn.drop(self._db, delete=True)
+        txn.drop(self._db, delete=True)
 
     def empty(self, txn):
         """
@@ -276,7 +314,7 @@ class Index(object):
         try:
             ikey = self._func(record)
             return txn.put(ikey, key.encode(), db=self._db)
-        except KeyError as error:
+        except KeyError:
             return False
 
     def save(self, txn, key, old, rec):
@@ -295,8 +333,8 @@ class Index(object):
         old_key = self._func(old)
         new_key = self._func(rec)
         if old_key != new_key:
-            txn.delete(old_key, key, db=self._db)
-            txn.put(new_key, key, db=self._db)
+            if not txn.delete(old_key, key, db=self._db): raise xReindexNoKey1
+            if not txn.put(new_key, key, db=self._db): raise xReindexNoKey2
 
     def reindex(self, db, txn=None):
         """
@@ -312,25 +350,24 @@ class Index(object):
         def worker():
             count = 0
             self.empty(txn)
-            try:
-                with Cursor(db, txn) as cursor:
-                    if cursor.first():
-                        while True:
-                            record = loads(bytes(cursor.value()))
-                            if self.put(txn, record['_id'], record):
-                                count += 1
-                            if not cursor.next():
-                                break
-            except Exception as error:
-                txn.abort()
-                raise error
+            with Cursor(db, txn) as cursor:
+                if cursor.first():
+                    while True:
+                        record = loads(bytes(cursor.value()))
+                        if self.put(txn, cursor.key().decode(), record):
+                            count += 1
+                        if not cursor.next():
+                            break
             return count
 
         if txn:
             return worker()
         with self._env.begin(write=True) as txn:
-            return worker()
-
+            try:
+                return worker()
+            except Exception as error:
+                txn.abort()
+                raise error
 
 class Table(object):
     """
@@ -365,22 +402,21 @@ class Table(object):
         :type txn: Transaction
         """
         def worker():
-            try:
-                key = str(uuid())
-                record['_id'] = key
-                txn.put(key.encode(), dumps(record).encode(), db=self._db, append=True)
-                for name in self._indexes:
-                    self._indexes[name].put(txn, key, record)
+            key = str(ObjectId())
+            if not txn.put(key.encode(), dumps(record).encode(), db=self._db, append=True): raise xWriteFail(key)
+            record['_id'] = key.encode()
+            for name in self._indexes:
+                if not self._indexes[name].put(txn, key, record): raise xWriteFail(name)
 
-            except Exception as error:
-                txn.abort()
-                raise error
-
-        if txn:
-            worker()
+        if txn: worker()
         else:
             with self._env.begin(write=True) as txn:
-                worker()
+                try:
+                    worker()
+                except Exception as error:
+                    txn.abort()
+                    raise error
+
 
     def delete(self, keys):
         """
@@ -393,43 +429,47 @@ class Table(object):
             keys = [keys]
         with self._env.begin(write=True) as txn:
             try:
-                for _id in keys:
-                    key = _id.encode()
+                for key in keys:
                     doc = loads(bytes(txn.get(key, db=self._db)))
-                    txn.delete(key, db=self._db)
+                    if not txn.delete(key, db=self._db): raise xWriteFail
                     for name in self._indexes:
-                        self._indexes[name].delete(txn, key, doc)
+                        if not self._indexes[name].delete(txn, key, doc): raise xWriteFail
             except Exception as error:
                 txn.abort()
                 raise error
 
-    def drop(self, delete=True):
+    def drop(self, delete=True, txn=None):
         """
         Drop this tablex and all it's indecies
 
         :param delete: Whether we delete the table after removing all items
         :type delete: bool
         """
-        with self._env.begin(write=True) as txn:
-            try:
-                for name in self.indexes:
-                    if delete:
-                        self.unindex(name, txn)
-                    else:
-                        self._indexes[name].empty(txn)
-                txn.drop(self._db, delete)
-            except Exception as error:
-                txn.abort()
-                raise error
+        def worker():
+            for name in self.indexes:
+                if delete:
+                    self.unindex(name, txn)
+                else:
+                    self._indexes[name].empty(txn)
+            txn.drop(self._db, delete)
 
-    def empty(self):
+        if txn: worker()
+        else:
+            with self._env.begin(write=True) as txn:
+                try:
+                    worker()
+                except Exception as error:
+                    txn.abort()
+                    raise error
+
+    def empty(self, txn=None):
         """
         Clear all records from the current table
 
         :return: True if the table was cleared
         :rtype: bool
         """
-        return self.drop(False)
+        return self.drop(False, txn)
 
     def exists(self, name):
         """
@@ -471,10 +511,14 @@ class Table(object):
                 first = False
                 record = cursor.value()
                 if index:
+                    key = record
                     record = txn.get(record, db=self._db)
+                else:
+                    key = cursor.key()
                 record = loads(bytes(record))
                 if callable(expression) and not expression(record):
                     continue
+                record['_id'] = key
                 yield record
                 count += 1
 
@@ -490,7 +534,11 @@ class Table(object):
         :rtype: dict
         """
         with self._env.begin() as txn:
-            return loads(bytes(txn.get(key, db=self._db)))
+            record = txn.get(key, db=self._db)
+            if not record: return None
+            record = loads(bytes(record))
+            record['_id'] = key
+            return record
 
     def index(self, name, func=None, duplicates=False):
         """
@@ -514,10 +562,14 @@ class Table(object):
             }
             self._indexes[name] = Index(self._env, name, func, conf)
             with self._env.begin(write=True) as txn:
-                key = ''.join(['@', _index_name(self, name)]).encode()
-                val = dumps({'conf': conf, 'func': func}).encode()
-                txn.put(key, val)
-                self._indexes[name].reindex(self._db, txn)
+                try:
+                    key = ''.join(['@', _index_name(self, name)]).encode()
+                    val = dumps({'conf': conf, 'func': func}).encode()
+                    if not txn.put(key, val): raise xWriteFail
+                    self._indexes[name].reindex(self._db, txn)
+                except Exception as error:
+                    txn.abort()
+                    raise error
 
         return self._indexes[name]
 
@@ -532,16 +584,24 @@ class Table(object):
         """
 
         def worker():
-            key = record['_id'].encode()
-            old = loads(bytes(txn.get(key, db=self._db)))
-            txn.put(key, dumps(record).encode(), db=self._db)
+            key = record['_id']
+            tmp = dict(record)
+            del tmp['_id']
+            doc = txn.get(key, db=self._db)
+            if not doc: raise xWriteFail('old record is missing')
+            old = loads(bytes(doc))
+            if not txn.put(key, dumps(tmp).encode(), db=self._db): raise xWriteFail('main record')
             for name in self._indexes:
-                self._indexes[name].save(txn, key, old, record)
+                self._indexes[name].save(txn, key, old, tmp)
 
         if txn: worker()
         else:
             with self._env.begin(write=True) as txn:
-                worker()
+                try:
+                    worker()
+                except Exception as error:
+                    txn.abort()
+                    raise error
 
     def seek(self, index, record):
         """
@@ -562,9 +622,32 @@ class Table(object):
                     if not cursor.key():
                         break
                     record = txn.get(cursor.value(), db=self._db)
-                    yield loads(bytes(record))
+                    record = loads(bytes(record))
+                    record['_id'] = cursor.key()
+                    yield record
                     if not cursor.next_dup():
                         break
+
+    def seek_one(self, index, record):
+        """
+        Find the first records matching the key in the specified index.
+
+        :param index: Name of the index to seek on
+        :type index: str
+        :param record: A template record containing the fields to search on
+        :type record: dict
+        :return: The record with matching key
+        :type: dict
+        """
+        with self._env.begin() as txn:
+            index = self._indexes[index]
+            entry = index.get(txn, record)
+            if not entry: return None
+            record = txn.get(entry, db=self._db)
+            if not record: return None
+            record = loads(bytes(record))
+            record['_id'] = entry
+            return record
 
     def range(self, index, lower, upper):
         """
@@ -586,7 +669,9 @@ class Table(object):
                 while True:
                     if not cursor.key(): return
                     record = txn.get(cursor.value(), db=self._db)
-                    yield loads(bytes(record))
+                    record = loads(bytes(record))
+                    record['_id'] = cursor.value()
+                    yield record
                     if not index.set_next(cursor, upper):
                         return
 
@@ -605,18 +690,17 @@ class Table(object):
             raise xIndexMissing()
 
         def worker():
-            try:
-                self._indexes[name].drop(txn)
-                del self._indexes[name]
-                txn.delete(''.join(['@', _index_name(self, name)]).encode())
-            except Exception as error:
-                txn.abort(); raise error
+            self._indexes[name].drop(txn)
+            del self._indexes[name]
+            if not txn.delete(''.join(['@', _index_name(self, name)]).encode()): raise xWriteFail
 
-        if txn:
-            worker()
+        if txn: worker()
         else:
             with self._env.begin(write=True) as txn:
-                worker()
+                try:
+                    worker()
+                except Exception as error:
+                    txn.abort(); raise error
 
     @property
     def indexes(self):
@@ -724,3 +808,15 @@ class xAborted(Exception):
 
 class xWriteFail(Exception):
     """Exception - write failed"""
+
+
+class xReindexNoKey1(Exception):
+    """Exception - write failed"""
+
+
+class xReindexNoKey2(Exception):
+    """Exception - write failed"""
+
+
+class xDropFail(Exception):
+    """Exception - drop failed"""
