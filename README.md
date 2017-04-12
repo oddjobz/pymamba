@@ -26,7 +26,7 @@ to deploy and maintain*)
 
 See the API here: [https://pymamba.linux.co.uk](https://pymamba.linux.co.uk)
 
-To see what's changed: [https://oddjobz.github.io/pymamba/CHANGELOG.html](CHANGELOG.md)
+To see what's changed: [CHANGELOG](https://oddjobz.github.io/pymamba/CHANGELOG.html)
 
 The *GitHub Pages* version of this page is here: [https://oddjobz.github.io/pymamba](https://oddjobz.github.io/pymamba)
 
