@@ -42,7 +42,7 @@ not feature complete and not exhaustively tested in the real world.
 from lmdb import Cursor, Environment
 from ujson import loads, dumps
 from sys import _getframe, maxsize
-from bson import ObjectId
+from bson.objectid import ObjectId
 
 __version__ = '0.1.29'
 
