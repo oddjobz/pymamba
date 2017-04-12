@@ -5,6 +5,7 @@
 * Lots of misc bug fixes and exception fixes
 * New Readme
 * Added seek_one function
+* Switched from UUID to bson.**ObjectId**
 
 #### Version 0.1.14
 
