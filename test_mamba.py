@@ -436,6 +436,13 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(res[0]['code'], 'A')
         self.assertEqual(res[-1]['code'], 'F')
 
+        res = list(table.find())
+        lower = res[0]['_id']
+        upper = res[-1]['_id']
+        natural = list(table.range(None, {'_id': lower}, {'_id': upper}))
+        for doc in natural:
+            print('{_id} {code} {name}'.format(**doc))
+
         table.index('by_code', '{code}')
         res = list(table.range('by_code', {'code': '0'}, {'code': 'Z'}))
         self.assertEqual(res[0]['code'], 'A')

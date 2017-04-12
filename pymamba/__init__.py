@@ -537,6 +537,58 @@ class Table(object):
 
             cursor.close()
 
+    def range(self, index, lower, upper, inclusive=True):
+        """
+        Find all records with a key >= lower and <= upper
+
+        :param index: The name of the index to search
+        :type index: str
+        :param lower: A template record containing the lower end of the range
+        :type lower: dict
+        :param upper: A template record containing the upper end of the range
+        :type upper: dict
+        :param inclusive: Whether to include items at each boundary
+        :type inclusive: bool
+        :return: The records with keys witin the specified range (generator)
+        :type: dict
+        """
+        with self._env.begin() as txn:
+            if not index:
+                with Cursor(self._db, txn) as cursor:
+                    lower = lower['_id']
+                    upper = upper['_id']
+                    cursor.set_range(lower)
+                    while not inclusive and cursor.key() == lower:
+                        if not cursor.next() or cursor.key() == upper: return
+                    while True:
+                        key = cursor.key()
+                        if not key: return
+                        record = cursor.value()
+                        record = loads(bytes(record))
+                        record['_id'] = key
+                        print(inclusive, lower, upper, key)
+                        if not inclusive and key == upper: return
+                        yield record
+                        if not cursor.next() or cursor.key() == upper: return
+
+            else:
+                if index not in self._indexes:
+                    raise xIndexMissing
+                index = self._indexes[index]
+                with index.cursor(txn) as cursor:
+                    index.set_range(cursor, lower)
+                    while not inclusive and index.match(cursor.key(), lower):
+                        if not index.set_next(cursor, upper): return
+                    while True:
+                        key = cursor.key()
+                        if not key: return
+                        record = txn.get(cursor.value(), db=self._db)
+                        record = loads(bytes(record))
+                        record['_id'] = cursor.value()
+                        if not inclusive and index.match(key, upper): return
+                        yield record
+                        if not index.set_next(cursor, upper): return
+
     def get(self, key):
         """
         Get a single record based on it's key
@@ -661,37 +713,6 @@ class Table(object):
             record = loads(bytes(record))
             record['_id'] = entry
             return record
-
-    def range(self, index, lower, upper, inclusive=True):
-        """
-        Find all records with a key >= lower and <= upper
-        
-        :param index: The name of the index to search
-        :type index: str
-        :param lower: A template record containing the lower end of the range
-        :type lower: dict
-        :param upper: A template record containing the upper end of the range
-        :type upper: dict
-        :param inclusive: Whether to include items at each boundary
-        :type inclusive: bool
-        :return: The records with keys witin the specified range (generator)
-        :type: dict
-        """
-        with self._env.begin() as txn:
-            index = self._indexes[index]
-            with index.cursor(txn) as cursor:
-                index.set_range(cursor, lower)
-                while not inclusive and index.match(cursor.key(), lower):
-                    if not index.set_next(cursor, upper): return
-                while True:
-                    key = cursor.key()
-                    if not key: return
-                    record = txn.get(cursor.value(), db=self._db)
-                    record = loads(bytes(record))
-                    record['_id'] = cursor.value()
-                    if not inclusive and index.match(key, upper): return
-                    yield record
-                    if not index.set_next(cursor, upper): return
 
     def unindex(self, name, txn=None):
         """
