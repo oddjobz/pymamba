@@ -1,7 +1,7 @@
 # PyMamba
 
-[![Build Status](https://travis-ci.org/oddjobz/pymamba.svg?branch=master&v=16)](https://travis-ci.org/oddjobz/pymamba)
-[![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master&v=16)](https://coveralls.io/github/oddjobz/pymamba?branch=master)
+[![Build Status](https://travis-ci.org/oddjobz/pymamba.svg?branch=master&v=17)](https://travis-ci.org/oddjobz/pymamba)
+[![Coverage Status](https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master&v=17)](https://coveralls.io/github/oddjobz/pymamba?branch=master)
 [![PyPI version](https://badge.fury.io/py/pymamba.svg)](https://badge.fury.io/py/pymamba)
 [![PyPI](https://img.shields.io/pypi/dd/pymamba.svg?style=flat)](https://pypi.python.org/pypi/pymamba)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=Y8KQE7TRJV6ZA)
