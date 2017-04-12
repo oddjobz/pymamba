@@ -580,8 +580,7 @@ class Table(object):
                             if forward(): break
 
             else:
-                if index not in self._indexes:
-                    raise xIndexMissing
+                if index not in self._indexes: raise xIndexMissing
                 index = self._indexes[index]
                 with index.cursor(txn) as cursor:
 
@@ -597,14 +596,12 @@ class Table(object):
                         while not inclusive and index.match(cursor.key(), lower):
                             if not index.set_next(cursor, upper): break
                     else:
-                        if cursor.first() and not inclusive:
-                            cursor.next()
+                        if cursor.first() and not inclusive: cursor.next()
                     while True:
                         key = cursor.key()
                         if not key: break
                         record = txn.get(cursor.value(), db=self._db)
-                        if not record:
-                            raise xNotFound(cursor.value())
+                        if not record: raise xNotFound(cursor.value())
                         record = loads(bytes(record))
                         record['_id'] = cursor.value()
                         if not inclusive:
