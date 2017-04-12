@@ -29,7 +29,7 @@ setup(
     keywords=['pymamba','database','LMDB'],
     install_requires=[
 	'lmdb',
-        'ujson',
+    'ujson',
 	'pymongo'
     ]
 )

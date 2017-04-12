@@ -1,3 +1,9 @@
+### Version 0.1.31
+
+* Added three new test cases
+* Added "inclusive" option to table.range, set False to exclude matching keys at 
+each end of the range results.
+
 ### Version 0.1.30
 
 * _id no longer stored in record body (removes duplication)

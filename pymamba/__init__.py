@@ -219,6 +219,19 @@ class Index(object):
         """
         return Cursor(self._db, txn)
 
+    def match(self, value, record):
+        """
+        Test for equality between a key value and a record specification
+        
+        :param value: A key value
+        :type param: str
+        :param record: An index spec
+        :type record: dict
+        :return: True if equal
+        :rtype: bool
+        """
+        return value == self._func(record)
+
     def set_key(self, cursor, record):
         """
         Set the cursor to the first matching record
@@ -649,7 +662,7 @@ class Table(object):
             record['_id'] = entry
             return record
 
-    def range(self, index, lower, upper):
+    def range(self, index, lower, upper, inclusive=True):
         """
         Find all records with a key >= lower and <= upper
         
@@ -659,6 +672,8 @@ class Table(object):
         :type lower: dict
         :param upper: A template record containing the upper end of the range
         :type upper: dict
+        :param inclusive: Whether to include items at each boundary
+        :type inclusive: bool
         :return: The records with keys witin the specified range (generator)
         :type: dict
         """
@@ -666,14 +681,17 @@ class Table(object):
             index = self._indexes[index]
             with index.cursor(txn) as cursor:
                 index.set_range(cursor, lower)
+                while not inclusive and index.match(cursor.key(), lower):
+                    if not index.set_next(cursor, upper): return
                 while True:
-                    if not cursor.key(): return
+                    key = cursor.key()
+                    if not key: return
                     record = txn.get(cursor.value(), db=self._db)
                     record = loads(bytes(record))
                     record['_id'] = cursor.value()
+                    if not inclusive and index.match(key, upper): return
                     yield record
-                    if not index.set_next(cursor, upper):
-                        return
+                    if not index.set_next(cursor, upper): return
 
     def unindex(self, name, txn=None):
         """
@@ -700,7 +718,8 @@ class Table(object):
                 try:
                     worker()
                 except Exception as error:
-                    txn.abort(); raise error
+                    txn.abort()
+                    raise error
 
     @property
     def indexes(self):

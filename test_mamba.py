@@ -242,6 +242,11 @@ class UnitTests(unittest.TestCase):
         table.unindex('by_name')
         self.assertFalse('by_name' in table.indexes)
 
+        table.index('duff', '{name}')
+        table._indexes['duff'] = None
+        with self.assertRaises(lmdb.Error):
+            table.unindex('duff')
+
     def test_30_count_with_txn(self):
 
         db = Database(self._db_name)
@@ -306,6 +311,8 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(by_age_name.count(), 7)
         self.assertEqual(by_name.count(), 7)
         self.assertEqual(by_age.count(), 7)
+        with self.assertRaises(lmdb.Error):
+            by_age.reindex(None)
 
     def test_34_function_index(self):
 
@@ -349,6 +356,10 @@ class UnitTests(unittest.TestCase):
         results[0]['name'] = '!Squizzey'
         results[0]['age'] = 1
         table.save(results[0])
+
+        table._indexes['duff'] = None
+        with self.assertRaises(lmdb.Error):
+            table.save(results[0])
 
         self.assertEqual(list(table.find('by_compound'))[0]['name'], '!Squizzey')
         self.assertEqual(list(table.find('by_age'))[0]['age'], 1)
@@ -402,4 +413,49 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(doc['name'], name)
             self.assertNotEqual(doc['_id'], _id)
             break
+
+    def test_38_range(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        data = [
+            {'code': 'F', 'name': 'Tom'},
+            {'code': 'E', 'name': 'Dick'},
+            {'code': 'E', 'name': 'Dick1'},
+            {'code': 'D', 'name': 'Harry'},
+            {'code': 'C', 'name': 'Fred'},
+            {'code': 'B', 'name': 'John'},
+            {'code': 'B', 'name': 'John1'},
+            {'code': 'A', 'name': 'Sam'},
+        ]
+        for row in data:
+            table.append(row)
+
+        table.index('by_code', '{code}', duplicates=True)
+        res = list(table.find('by_code'))
+        self.assertEqual(res[0]['code'], 'A')
+        self.assertEqual(res[-1]['code'], 'F')
+
+        table.index('by_code', '{code}')
+        res = list(table.range('by_code', {'code': '0'}, {'code': 'Z'}))
+        self.assertEqual(res[0]['code'], 'A')
+        self.assertEqual(res[-1]['code'], 'F')
+
+        table.index('by_code', '{code}')
+        res = list(table.range('by_code', {'code': 'B'}, {'code': 'E'}))
+        self.assertEqual(res[0]['code'], 'B')
+        self.assertEqual(res[-1]['code'], 'E')
+
+        res = list(table.range('by_code', {'code': 'B'}, {'code': 'E'}, inclusive=False))
+        self.assertEqual(res[0]['code'], 'C')
+        self.assertEqual(res[-1]['code'], 'D')
+
+        res = list(table.range('by_code', {'code': 'A'}, {'code': 'F'}, inclusive=False))
+        self.assertEqual(res[0]['code'], 'B')
+        self.assertEqual(res[-1]['code'], 'E')
+
+
+        for doc in table.range('by_code', {'code': 'B'}, {'code': 'E'}, inclusive=False):
+            print(doc)
+
 
