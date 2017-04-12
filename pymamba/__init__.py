@@ -44,7 +44,7 @@ from ujson import loads, dumps
 from sys import _getframe, maxsize
 from bson.objectid import ObjectId
 
-__version__ = '0.1.31'
+__version__ = '0.1.32'
 
 class Database(object):
     """
@@ -537,9 +537,12 @@ class Table(object):
 
             cursor.close()
 
-    def range(self, index, lower, upper, inclusive=True):
+    def range(self, index, lower=None, upper=None, inclusive=True):
         """
-        Find all records with a key >= lower and <= upper
+        Find all records with a key >= lower and <= upper. If you set inclusive to false the range
+        becomes key > lower and key < upper. Upper and/or Lower can be set to None, if lower is none
+        the range starts at the beginning of the table, and if upper is None searching will continue
+        to the end.
 
         :param index: The name of the index to search
         :type index: str
@@ -549,45 +552,67 @@ class Table(object):
         :type upper: dict
         :param inclusive: Whether to include items at each boundary
         :type inclusive: bool
-        :return: The records with keys witin the specified range (generator)
+        :return: The records with keys within the specified range (generator)
         :type: dict
         """
         with self._env.begin() as txn:
             if not index:
                 with Cursor(self._db, txn) as cursor:
-                    lower = lower['_id']
-                    upper = upper['_id']
-                    cursor.set_range(lower)
+
+                    def forward():
+                        return (upper and cursor.key() > upper) or not cursor.next()
+
+                    lower = lower['_id'] if lower else None
+                    upper = upper['_id'] if upper else None
+                    cursor.set_range(lower) if lower else cursor.first()
                     while not inclusive and cursor.key() == lower:
                         if not cursor.next() or cursor.key() == upper: return
                     while True:
                         key = cursor.key()
-                        if not key: return
-                        record = cursor.value()
-                        record = loads(bytes(record))
+                        if not key: break
+                        record = loads(bytes(cursor.value()))
                         record['_id'] = key
-                        print(inclusive, lower, upper, key)
-                        if not inclusive and key == upper: return
-                        yield record
-                        if not cursor.next() or cursor.key() == upper: return
+                        if not inclusive:
+                            if forward(): break
+                            yield record
+                        else:
+                            yield record
+                            if forward(): break
 
             else:
                 if index not in self._indexes:
                     raise xIndexMissing
                 index = self._indexes[index]
                 with index.cursor(txn) as cursor:
-                    index.set_range(cursor, lower)
-                    while not inclusive and index.match(cursor.key(), lower):
-                        if not index.set_next(cursor, upper): return
+
+                    def forward():
+                        if upper:
+                            if index.match(key, upper) or not index.set_next(cursor, upper): return False
+                        else:
+                            if not cursor.next(): return False
+                        return True
+
+                    if lower:
+                        index.set_range(cursor, lower)
+                        while not inclusive and index.match(cursor.key(), lower):
+                            if not index.set_next(cursor, upper): break
+                    else:
+                        if cursor.first() and not inclusive:
+                            cursor.next()
                     while True:
                         key = cursor.key()
-                        if not key: return
+                        if not key: break
                         record = txn.get(cursor.value(), db=self._db)
+                        if not record:
+                            raise xNotFound(cursor.value())
                         record = loads(bytes(record))
                         record['_id'] = cursor.value()
-                        if not inclusive and index.match(key, upper): return
-                        yield record
-                        if not index.set_next(cursor, upper): return
+                        if not inclusive:
+                            if not forward(): break
+                            yield record
+                        else:
+                            yield record
+                            if not forward(): break
 
     def get(self, key):
         """

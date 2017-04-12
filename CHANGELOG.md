@@ -1,3 +1,7 @@
+### Version 0.1.32
+
+* Updated range code to include None as a possible upper and/or lower limit
+
 ### Version 0.1.31
 
 * Added three new test cases

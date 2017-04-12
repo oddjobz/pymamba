@@ -439,16 +439,71 @@ class UnitTests(unittest.TestCase):
         res = list(table.find())
         lower = res[0]['_id']
         upper = res[-1]['_id']
+        print('Lower={} Upper={}'.format(lower, upper))
         natural = list(table.range(None, {'_id': lower}, {'_id': upper}))
-        for doc in natural:
-            print('{_id} {code} {name}'.format(**doc))
+        self.assertEqual(natural[0]['code'], 'F')
+        self.assertEqual(natural[-1]['code'], 'A')
+
+        res = list(table.find())
+        lower = None
+        upper = res[-1]['_id']
+        print('Lower={} Upper={}'.format(lower, upper))
+        natural = list(table.range(None, {'_id': lower}, {'_id': upper}))
+        self.assertEqual(natural[0]['code'], 'F')
+        self.assertEqual(natural[-1]['code'], 'A')
+
+        res = list(table.find())
+        lower = res[0]['_id']
+        upper = None
+        print('Lower={} Upper={}'.format(lower, upper))
+        natural = list(table.range(None, {'_id': lower}, {'_id': upper}))
+        self.assertEqual(natural[0]['code'], 'F')
+        self.assertEqual(natural[-1]['code'], 'A')
+
+        res = list(table.find())
+        lower = None
+        upper = None
+        print('Lower={} Upper={}'.format(lower, upper))
+        natural = list(table.range(None, {'_id': lower}, {'_id': upper}))
+        self.assertEqual(natural[0]['code'], 'F')
+        self.assertEqual(natural[-1]['code'], 'A')
+
+
+        lower = res[0]['_id']
+        upper = res[0]['_id']
+        natural = list(table.range(None, {'_id': lower}, {'_id': upper}))
+        self.assertEqual(natural[0]['code'], 'F')
+
+        lower = res[-1]['_id']
+        upper = res[-1]['_id']
+        natural = list(table.range(None, {'_id': lower}, {'_id': upper}))
+        self.assertEqual(natural[0]['code'], 'A')
+
+        lower = res[0]['_id']
+        upper = res[0]['_id']
+        natural = list(table.range(None, {'_id': lower}, {'_id': upper}, inclusive=False))
+        self.assertEqual(natural, [])
+
+        lower = res[-1]['_id']
+        upper = res[-1]['_id']
+        natural = list(table.range(None, {'_id': lower}, {'_id': upper}, inclusive=False))
+        self.assertEqual(natural, [])
+
+        lower = res[0]['_id']
+        upper = res[1]['_id']
+        natural = list(table.range(None, {'_id': lower}, {'_id': upper}, inclusive=False))
+        self.assertEqual(natural, [])
+
+        lower = res[0]['_id']
+        upper = res[2]['_id']
+        natural = list(table.range(None, {'_id': lower}, {'_id': upper}, inclusive=False))
+        self.assertEqual(natural[0]['_id'], res[1]['_id'])
 
         table.index('by_code', '{code}')
         res = list(table.range('by_code', {'code': '0'}, {'code': 'Z'}))
         self.assertEqual(res[0]['code'], 'A')
         self.assertEqual(res[-1]['code'], 'F')
 
-        table.index('by_code', '{code}')
         res = list(table.range('by_code', {'code': 'B'}, {'code': 'E'}))
         self.assertEqual(res[0]['code'], 'B')
         self.assertEqual(res[-1]['code'], 'E')
@@ -461,8 +516,12 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(res[0]['code'], 'B')
         self.assertEqual(res[-1]['code'], 'E')
 
+        res = list(table.range('by_code', None, None))
+        self.assertEqual(res[0]['code'], 'A')
+        self.assertEqual(res[-1]['code'], 'F')
 
-        for doc in table.range('by_code', {'code': 'B'}, {'code': 'E'}, inclusive=False):
-            print(doc)
+
+        #for doc in table.range('by_code', {'code': 'B'}, {'code': 'E'}, inclusive=False):
+        #    print(doc)
 
 
