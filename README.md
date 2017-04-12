@@ -25,6 +25,8 @@ to deploy and maintain*)
 
 See the API here: [https://pymamba.linux.co.uk](https://pymamba.linux.co.uk)
 
+The *GitHub Pages* version of this page is here: [https://oddjobz.github.io/pymamba](https://oddjobz.github.io/pymamba)
+
 ### Features
 
 * LMDB mmapped storage engine, arguably the *best* solution for small to medium DB's
