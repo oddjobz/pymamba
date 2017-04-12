@@ -1,6 +1,6 @@
 #from distutils.core import setup
 from setuptools import setup
-__version__ = '0.1.29'
+__version__ = '0.1.30'
 
 setup(
     name='pymamba',
@@ -30,6 +30,6 @@ setup(
     install_requires=[
 	'lmdb',
         'ujson',
-	'bson'
+	'pymongo'
     ]
 )
