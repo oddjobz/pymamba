@@ -7,6 +7,9 @@ not feature complete and not exhaustively tested in the real world.
 """
 ##############################################################################
 # TODO Items go here ...
+# TODO: Add an explicit 'sync' method
+# TODO: add table method ensure(index_name, spec)
+# TODO: don't rely on cached index list for 'drop'
 ##############################################################################
 #
 # MIT License
@@ -39,12 +42,52 @@ not feature complete and not exhaustively tested in the real world.
 #   playing with.
 #
 ##############################################################################
-from lmdb import Cursor, Environment
+from lmdb import Cursor, Environment, Transaction
 from ujson import loads, dumps
 from sys import _getframe, maxsize
 from bson.objectid import ObjectId
 
-__version__ = '0.1.32'
+__version__ = '0.1.35'
+
+class DatabaseTransaction(object):
+    """
+    This class is used to wrap LMDB transactions and track changes for the replication system.
+    
+    :param dbh: Database handle, should point to our Database instance
+    :type dbh: Database
+    """
+    def __init__(self, db):
+        self._db = db
+        self._txn = Transaction(self._db.environment, write=True)
+
+    def __enter__(self):
+        """
+        This is used by 'with' and should return the 'with' variable
+        
+        :return: A new transaction context
+        :rtype: Transaction
+        """
+        return self._txn
+
+    def __exit__(self, transaction_type, transaction_value, traceback):
+        """
+        Come here when a 'with' exits, we use this to flush the transaction.
+        
+        :param transaction_type: Exception or None
+        :param transaction_value: n/a
+        :param traceback: n/a
+        :return: n/a
+        """
+        if transaction_type == None:
+            self._txn.commit()
+        else:
+            self._txn.abort()
+        self._db.transaction = None
+
+    @property
+    def transaction(self):
+        return self._txn
+
 
 class Database(object):
     """
@@ -67,11 +110,29 @@ class Database(object):
         'map_async': True
     }
 
+    @property
+    def environment(self):
+        return self._env
+
+    @property
+    def transaction(self):
+        return self._txn
+
+    @transaction.setter
+    def transaction(self, val):
+        self._txn = val
+
+    def begin(self):
+        txn = DatabaseTransaction(self)
+        self._txn = txn.transaction
+        return txn
+
     def __init__(self, name, conf=None):
         conf = dict(self._conf, **conf.get('env', {})) if conf else self._conf
         self._tables = {}
         self._env = Environment(name, **conf)
         self._db = self._env.open_db()
+        self._txn = None
 
     def __del__(self):
         self.close()
@@ -144,7 +205,7 @@ class Database(object):
         :rtype: Table
         """
         if name not in self._tables:
-            self._tables[name] = Table(self._env, name)
+            self._tables[name] = Table(self, name)
         return self._tables[name]
 
     @property
@@ -184,13 +245,13 @@ class Index(object):
     """
     _debug = False
 
-    def __init__(self, env, name, func, conf):
-        self._env = env
+    def __init__(self, context, name, func, conf):
+        self._context = context
         self._name = name
         self._conf = conf
         self._conf['key'] = self._conf['key'].encode()
         self._func = _anonymous('(r): return "{}".format(**r).encode()'.format(func))
-        self._db = self._env.open_db(**self._conf)
+        self._db = self._context.environment.open_db(**self._conf)
 
     def count(self, txn=None):
         """
@@ -205,7 +266,7 @@ class Index(object):
             return txn.stat(self._db).get('entries', 0)
         if txn:
             return entries()
-        with self._env.begin() as txn:
+        with self._context.environment.begin() as txn:
             return entries()
 
     def cursor(self, txn):
@@ -375,7 +436,7 @@ class Index(object):
 
         if txn:
             return worker()
-        with self._env.begin(write=True) as txn:
+        with self._context.environment.begin(write=True) as txn:
             try:
                 return worker()
             except Exception as error:
@@ -394,16 +455,18 @@ class Table(object):
     _debug = False
     _indexes = {}
 
-    def __init__(self, env, name=None):
-        self._env = env
+    def __init__(self, context, name=None):
+        self._context = context
         self._name = name
         self._indexes = {}
-        self._db = self._env.open_db(name.encode())
+        txn = self._txn = self._context.transaction
+        self._db = self._context.environment.open_db(name.encode(), txn=self._txn)
         for index in self.indexes:
             key = ''.join(['@', _index_name(self, index)]).encode()
-            with self._env.begin() as txn:
-                doc = loads(bytes(txn.get(key)))
-                self._indexes[index] = Index(self._env, index, doc['func'], doc['conf'])
+            #with self._context.environment.begin() as txn:
+            #txn = self._context.transaction
+            doc = loads(bytes(txn.get(key)))
+            self._indexes[index] = Index(context, index, doc['func'], doc['conf'])
 
     def append(self, record, txn=None):
         """
@@ -413,23 +476,21 @@ class Table(object):
         :type record: dict
         :param txn: An open transaction
         :type txn: Transaction
+        :raises: xWriteFail on write error
         """
         def worker():
-            key = str(ObjectId())
+            key = str(record.get('_id', ObjectId()))
             if not txn.put(key.encode(), dumps(record).encode(), db=self._db, append=True): raise xWriteFail(key)
             record['_id'] = key.encode()
             for name in self._indexes:
                 if not self._indexes[name].put(txn, key, record): raise xWriteFail(name)
 
-        if txn: worker()
-        else:
-            with self._env.begin(write=True) as txn:
-                try:
-                    worker()
-                except Exception as error:
-                    txn.abort()
-                    raise error
-
+        if self._context.transaction:
+            txn = self._context.transaction
+            worker()
+            return
+        with self._context.environment.begin(write=True) as txn:
+            worker()
 
     def delete(self, keys):
         """
@@ -440,7 +501,7 @@ class Table(object):
         """
         if not isinstance(keys, list):
             keys = [keys]
-        with self._env.begin(write=True) as txn:
+        with self._context.environment.begin(write=True) as txn:
             try:
                 for key in keys:
                     doc = loads(bytes(txn.get(key, db=self._db)))
@@ -466,14 +527,11 @@ class Table(object):
                     self._indexes[name].empty(txn)
             txn.drop(self._db, delete)
 
-        if txn: worker()
-        else:
-            with self._env.begin(write=True) as txn:
-                try:
-                    worker()
-                except Exception as error:
-                    txn.abort()
-                    raise error
+        if txn:
+            worker()
+            return
+        with self._context.environment.begin(write=True) as txn:
+            worker()
 
     def empty(self, txn=None):
         """
@@ -508,7 +566,7 @@ class Table(object):
         :return: The next record (generator)
         :rtype: dict
         """
-        with self._env.begin() as txn:
+        with self._context.environment.begin() as txn:
             if not index:
                 cursor = Cursor(self._db, txn)
             else:
@@ -555,12 +613,14 @@ class Table(object):
         :return: The records with keys within the specified range (generator)
         :type: dict
         """
-        with self._env.begin() as txn:
+        with self._context.environment.begin() as txn:
             if not index:
                 with Cursor(self._db, txn) as cursor:
 
                     def forward():
-                        return (upper and cursor.key() > upper) or not cursor.next()
+                        if not cursor.next(): return False
+                        if upper and cursor.key() > upper: return False
+                        return True
 
                     lower = lower['_id'] if lower else None
                     upper = upper['_id'] if upper else None
@@ -573,11 +633,11 @@ class Table(object):
                         record = loads(bytes(cursor.value()))
                         record['_id'] = key
                         if not inclusive:
-                            if forward(): break
+                            if not forward(): break
                             yield record
                         else:
                             yield record
-                            if forward(): break
+                            if not forward(): break
 
             else:
                 if index not in self._indexes: raise xIndexMissing
@@ -620,7 +680,7 @@ class Table(object):
         :return: The requested record
         :rtype: dict
         """
-        with self._env.begin() as txn:
+        with self._context.environment.begin() as txn:
             record = txn.get(key, db=self._db)
             if not record: return None
             record = loads(bytes(record))
@@ -647,8 +707,8 @@ class Table(object):
                 'dupsort': duplicates,
                 'create': True,
             }
-            self._indexes[name] = Index(self._env, name, func, conf)
-            with self._env.begin(write=True) as txn:
+            self._indexes[name] = Index(self._context, name, func, conf)
+            with self._context.environment.begin(write=True) as txn:
                 try:
                     key = ''.join(['@', _index_name(self, name)]).encode()
                     val = dumps({'conf': conf, 'func': func}).encode()
@@ -671,24 +731,22 @@ class Table(object):
         """
 
         def worker():
+            if not '_id' in record: raise xNoKey
             key = record['_id']
-            tmp = dict(record)
-            del tmp['_id']
+            rec = dict(record)
+            del rec['_id']
             doc = txn.get(key, db=self._db)
             if not doc: raise xWriteFail('old record is missing')
             old = loads(bytes(doc))
-            if not txn.put(key, dumps(tmp).encode(), db=self._db): raise xWriteFail('main record')
+            if not txn.put(key, dumps(rec).encode(), db=self._db): raise xWriteFail('main record')
             for name in self._indexes:
-                self._indexes[name].save(txn, key, old, tmp)
+                self._indexes[name].save(txn, key, old, rec)
 
-        if txn: worker()
-        else:
-            with self._env.begin(write=True) as txn:
-                try:
-                    worker()
-                except Exception as error:
-                    txn.abort()
-                    raise error
+        if txn:
+            worker()
+            return
+        with self._context.environment.begin(write=True) as txn:
+            worker()
 
     def seek(self, index, record):
         """
@@ -701,16 +759,17 @@ class Table(object):
         :return: The records with matching keys (generator)
         :type: dict
         """
-        with self._env.begin() as txn:
+        with self._context.environment.begin() as txn:
             index = self._indexes[index]
             with index.cursor(txn) as cursor:
                 index.set_key(cursor, record)
                 while True:
                     if not cursor.key():
                         break
-                    record = txn.get(cursor.value(), db=self._db)
+                    key = cursor.value()
+                    record = txn.get(key, db=self._db)
                     record = loads(bytes(record))
-                    record['_id'] = cursor.key()
+                    record['_id'] = key
                     yield record
                     if not cursor.next_dup():
                         break
@@ -726,7 +785,7 @@ class Table(object):
         :return: The record with matching key
         :type: dict
         """
-        with self._env.begin() as txn:
+        with self._context.environment.begin() as txn:
             index = self._indexes[index]
             entry = index.get(txn, record)
             if not entry: return None
@@ -751,18 +810,16 @@ class Table(object):
             raise xIndexMissing()
 
         def worker():
+            if name not in self._indexes: raise xIndexMissing
             self._indexes[name].drop(txn)
             del self._indexes[name]
             if not txn.delete(''.join(['@', _index_name(self, name)]).encode()): raise xWriteFail
 
-        if txn: worker()
-        else:
-            with self._env.begin(write=True) as txn:
-                try:
-                    worker()
-                except Exception as error:
-                    txn.abort()
-                    raise error
+        if txn:
+            worker()
+            return
+        with self._context.environment.begin(write=True) as txn:
+            worker()
 
     @property
     def indexes(self):
@@ -775,8 +832,8 @@ class Table(object):
         results = []
         index_name = _index_name(self, '')
         pos = len(index_name)
-        with self._env.begin() as txn:
-            db = self._env.open_db()
+        with self._context.environment.begin() as txn:
+            db = self._context.environment.open_db()
             with Cursor(db, txn) as cursor:
                 if cursor.set_range(index_name.encode()):
                     while True:
@@ -794,7 +851,7 @@ class Table(object):
         :getter: Record count
         :type: int
         """
-        with self._env.begin() as txn:
+        with self._context.environment.begin() as txn:
             return txn.stat(self._db).get('entries', 0)
 
 
@@ -882,3 +939,7 @@ class xReindexNoKey2(Exception):
 
 class xDropFail(Exception):
     """Exception - drop failed"""
+
+
+class xNoKey(Exception):
+    """No key was specified for operation"""

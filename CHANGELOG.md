@@ -1,3 +1,10 @@
+### Version 0.1.35
+
+* Fixed bug in 'seek' where the index key rather than the primary key was returned in the record body
+* Clean up exception handling on append
+* Fix append to allow the use of user-generated _id's
+* Facilitate environment-wide txn
+
 ### Version 0.1.32
 
 * Updated range code to include None as a possible upper and/or lower limit

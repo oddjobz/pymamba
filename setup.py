@@ -1,6 +1,6 @@
 #from distutils.core import setup
 from setuptools import setup
-__version__ = '0.1.32'
+__version__ = '0.1.35'
 
 setup(
     name='pymamba',
