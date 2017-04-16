@@ -46,19 +46,41 @@ from lmdb import Cursor, Environment, Transaction
 from ujson import loads, dumps
 from sys import _getframe, maxsize
 from bson.objectid import ObjectId
+from types import GeneratorType
 
 __version__ = '0.1.35'
 
-class DatabaseTransaction(object):
+def read_transaction(func):
+    def wrapped_f(*args, **kwargs):
+        if 'txn' not in kwargs:
+            kwargs['txn'] = args[0]._ctx.env.begin()
+            kwargs['abort'] = True
+        return func(*args, **kwargs)
+    return wrapped_f
+
+def write_transaction(func):
+    def wrapped_f(*args, **kwargs):
+        if 'txn' in kwargs:
+            return func(*args, **kwargs)
+        if args[0]._ctx.transaction:
+            kwargs['txn'] = args[0]._ctx.transaction.txn
+            return func(*args, **kwargs)
+        with args[0]._ctx.env.begin(write=True) as kwargs['txn']:
+            return func(*args, **kwargs)
+    return wrapped_f
+
+
+class DBTransaction(object):
     """
     This class is used to wrap LMDB transactions and track changes for the replication system.
     
-    :param dbh: Database handle, should point to our Database instance
-    :type dbh: Database
+    :param db: Database handle, should point to our Database instance
+    :type db: Database
     """
     def __init__(self, db):
-        self._db = db
-        self._txn = Transaction(self._db.environment, write=True)
+        self.txns = []
+        self._txn = Transaction(db.env, write=True)
+        setattr(self, 'end', db.end)
 
     def __enter__(self):
         """
@@ -67,25 +89,107 @@ class DatabaseTransaction(object):
         :return: A new transaction context
         :rtype: Transaction
         """
-        return self._txn
+        return self
 
-    def __exit__(self, transaction_type, transaction_value, traceback):
+    def __exit__(self, txn_type, txn_value, traceback):
         """
         Come here when a 'with' exits, we use this to flush the transaction.
         
-        :param transaction_type: Exception or None
-        :param transaction_value: n/a
+        :param txn_type: Exception or None
+        :param txn_value: n/a
         :param traceback: n/a
         :return: n/a
         """
-        if transaction_type == None:
+        if txn_type is None:
             self._txn.commit()
         else:
             self._txn.abort()
-        self._db.transaction = None
+
+        print('Replicate:')
+        print(self.txns)
+        self.end()
+
+    def append(self, table, record):
+        """
+        Append a new record to the transaction
+
+        :param table: Table to operate on
+        :type table: str       
+        :param record: The record that has been appended
+        :type record: dict
+        """
+        self.txns.append({'A': 'A', 'T': table, 'R': record})
+
+    def delete(self, table, keys):
+        """
+        Add deletions to the transaction
+        
+        :param table: Table to operate on
+        :type table: str
+        :param keys: A list of keys to delete
+        :type keys: list
+        """
+        self.txns.append({'A': 'D', 'T': table, 'K': keys})
+
+    def drop(self, table):
+        """
+        Add a drop to the transaction
+        
+        :param table: Name of the table to drop
+        :type table: str
+        """
+        self.txns.append({'A': 'X', 'T': table})
+
+    def empty(self, table):
+        """
+        Add an empty to the transaction
+
+        :param table: Name of the table to empty
+        :type table: str
+        """
+        self.txns.append({'A': 'E', 'T': table})
+
+    def update(self, table, key, delta):
+        """
+        Add an update to the transaction
+        
+        :param table: Name of the table to update
+        :type table: str
+        :param key: Key of the record to update
+        :type key: str
+        :param delta: Delta of the changes old->new
+        :type delta: dict
+        """
+        self.txns.append({'A': 'U', 'T': table, 'K': key, 'Y': delta})
+
+    def index(self, table, name, func, duplicates):
+        """
+        Add an index to the transaction 
+        
+        :param table: The name of the table to index
+        :type table: str
+        :param name: The name of the index to create
+        :type name: str
+        :param func: The function to use to create index keys
+        :type func: str
+        :param duplicates: Whether to allow duplicates
+        :type duplicates: bool
+        """
+        self.txns.append({'A': 'I', 'T': table, 'N': name, 'F': func, 'D': duplicates})
+
+    def unindex(self, table, name):
+        """
+        Add an unindex to the transaction
+        
+        :param table: The name of the table to unindex
+        :type table: str
+        :param name: The name of the index to remove
+        :type name: str
+        """
+        self.txns.append({'A': 'U', 'T': table, 'N': name})
 
     @property
-    def transaction(self):
+    def txn(self):
         return self._txn
 
 
@@ -110,32 +214,54 @@ class Database(object):
         'map_async': True
     }
 
-    @property
-    def environment(self):
-        return self._env
-
-    @property
-    def transaction(self):
-        return self._txn
-
-    @transaction.setter
-    def transaction(self, val):
-        self._txn = val
-
-    def begin(self):
-        txn = DatabaseTransaction(self)
-        self._txn = txn.transaction
-        return txn
-
     def __init__(self, name, conf=None):
         conf = dict(self._conf, **conf.get('env', {})) if conf else self._conf
         self._tables = {}
         self._env = Environment(name, **conf)
         self._db = self._env.open_db()
-        self._txn = None
+        self._transaction = None
 
     def __del__(self):
         self.close()
+
+    @property
+    def env(self):
+        """
+        Return a reference to the current database environment
+        
+        :return: A Database Environment
+        :rtype: Environment
+        """
+        return self._env
+
+    @property
+    def transaction(self):
+        """
+        Return a reference to the current transaction
+        
+        :return: The current transaction (or None) 
+        :rtype: DBTransaction
+        """
+        return self._transaction
+
+    @property
+    def txn(self):
+        return self._transaction.txn if self._transaction else None
+
+    def begin(self):
+        """
+        Begin a new transaction returning a transaction reference (use with "with")
+        :return: Reference to the new transaction
+        :rtype: DBTransaction
+        """
+        self._transaction = DBTransaction(self)
+        return self._transaction
+
+    def end(self):
+        """
+        End an existing transaction committing all replication changes
+        """
+        self._transaction = None
 
     def close(self):
         """
@@ -156,63 +282,18 @@ class Database(object):
         """
         return name in self.tables
 
-    def drop(self, name):
-        """
-        Drop a database table
-        
-        :param name: Name of table to drop
-        :type name: str
-        """
-        if name in self._tables:
-            self._tables[name].drop(True)
-        del self._tables[name]
-
-    def restructure(self, name):
-        """
-        Restructure a table, copy to a temporary table, then copy back. This will recreate the table
-        and all it's ID's but will retain the original indexes. (which it will regenerate)
-        
-        :param name: Name of the table to restructure
-        :type name: str
-        """
-        if name not in self.tables: raise xTableMissing
-        src = self._tables[name]
-        dst_name = '~'+name
-        if dst_name in self.tables: raise xTableExists
-        dst = self.table(dst_name)
-        with self._env.begin(write=True) as txn:
-            for doc in src.find():
-                dst.append(doc, txn)
-
-        try:
-            with self._env.begin(write=True) as txn:
-                src.empty(txn)
-                for doc in dst.find():
-                    src.append(doc, txn)
-                dst.drop(True, txn)
-                del self._tables[dst_name]
-        except Exception as error:
-            txn.abort()
-            raise error
-
-    def table(self, name):
-        """
-        Return a reference to a table with a given name, creating first if it doesn't exist
-        
-        :param name: Name of table
-        :type name: str
-        :return: Reference to table
-        :rtype: Table
-        """
-        if name not in self._tables:
-            self._tables[name] = Table(self, name)
-        return self._tables[name]
+    @property
+    def tables(self):
+        return self._return_tables(False)
 
     @property
-    def tables(self, all=False):
+    def tables_all(self):
+        return self._return_tables(True)
+
+    def _return_tables(self, all):
         """
         PROPERTY - Generate a list of names of the tables associated with this database
-        
+
         :getter: Returns a list of table names
         :type: list
         """
@@ -228,13 +309,551 @@ class Database(object):
                             break
         return result
 
+    def drop(self, name):
+        """
+        Drop a database table
+        
+        :param name: Name of table to drop
+        :type name: str
+        """
+        if name in self._tables:
+            self._tables[name]._drop()
+            del self._tables[name]
+        else:
+            raise xTableMissing
+
+    def restructure(self, name):
+        """
+        Restructure a table, copy to a temporary table, then copy back. This will recreate the table
+        and all it's ID's but will retain the original indexes. (which it will regenerate)
+        
+        :param name: Name of the table to restructure
+        :type name: str
+        """
+        txn = self.transaction.txn
+        if name not in self.tables: raise xTableMissing
+        src = self._tables[name]
+        dst_name = '~'+name
+        if dst_name in self.tables: raise xTableExists
+        dst = self.table(dst_name)
+        for doc in src.find():
+            print(doc)
+        #    dst.append(doc, txn)
+
+        #src.empty(txn)
+        #for doc in dst.find(txn=txn):
+        #    src.append(doc, txn)
+        #dst.drop(True, txn)
+        #del self._tables[dst_name]
+
+    def table(self, name):
+        """
+        Return a reference to a table with a given name, creating first if it doesn't exist
+        
+        :param name: Name of table
+        :type name: str
+        :return: Reference to table
+        :rtype: Table
+        """
+        if name not in self._tables:
+            self._tables[name] = Table(self, name)
+        return self._tables[name]
+
+
+class Table(object):
+    """
+    Representation of a database table
+
+    :param ctx: An open database Environment
+    :type ctx: Database
+    :param name: A table name
+    :type name: str   
+    """
+    def __init__(self, ctx, name=None):
+
+        self._debug = False
+        self._ctx = ctx
+        self._name = name
+        self._indexes = {}
+        self._open_()
+
+    @write_transaction
+    def _open_(self, txn):
+        self._db = self._ctx.env.open_db(self._name.encode(), txn=txn)
+        for index in self.indexes:
+            key = ''.join(['@', _index_name(self, index)]).encode()
+            doc = loads(bytes(txn.get(key)))
+            self._indexes[index] = Index(self._ctx, index, doc['func'], doc['conf'], txn)
+
+    @write_transaction
+    def append(self, record, txn=None):
+        """
+        Append a new record to this table
+
+        :param record: The record to append
+        :type record: dict
+        :param txn: An open transaction
+        :type txn: Transaction
+        :raises: xWriteFail on write error
+        """
+        key = str(record.get('_id', ObjectId()))
+        if not txn.put(key.encode(), dumps(record).encode(), db=self._db, append=True): raise xWriteFail(key)
+        record['_id'] = key.encode()
+        for name in self._indexes:
+            if not self._indexes[name].put(txn, key, record): raise xWriteFail(name)
+
+        if self._ctx.transaction:
+            self._ctx.transaction.append(self._name, record)
+
+    @write_transaction
+    def delete(self, keys, txn):
+        """
+        Delete a record from this table
+
+        :param keys: A list of database keys to delete or a record
+        :type keys: list|dict
+        :param txn: Transaction
+        :type txn: An options transaction
+        """
+        if not isinstance(keys, list):
+            if isinstance(keys, dict):
+                keys = [keys['_id']]
+            else:
+                keys = [keys]
+
+        for key in keys:
+            doc = loads(bytes(txn.get(key, db=self._db)))
+            if not txn.delete(key, db=self._db): raise xWriteFail
+            for name in self._indexes:
+                if not self._indexes[name].delete(txn, key, doc): raise xWriteFail
+
+        if self._ctx.transaction:
+            self._ctx.transaction.delete(self._name, keys)
+
+    @write_transaction
+    def _drop(self, txn):
+        """
+        Drop this tablex and all it's indecies
+
+        :param delete: Whether we delete the table after removing all items
+        :type delete: bool
+        :param txn: An optional transaction
+        :type txn: Transaction
+        """
+        for name in self.indexes:
+            self._unindex(name, txn)
+        return txn.drop(self._db, True)
+
+    @write_transaction
+    def drop_index(self, name, txn):
+        """
+        Drop an index
+
+        :param name: Name of the index to drop
+        :type name: str
+        :param txn: An optional transaction
+        :type txn: Transaction
+        """
+        if name not in self._indexes:
+            raise xIndexMissing
+        return self._unindex(name, txn)
+
+    @write_transaction
+    def empty(self, txn):
+        """
+        Clear all records from the current table
+        """
+        for name in self.indexes:
+            self._indexes[name].empty(txn)
+        txn.drop(self._db, False)
+
+    def exists(self, name):
+        """
+        See whether an index already exists or not
+
+        :param name: Name of the index
+        :type name: str
+        :return: True if index already exists
+        :rtype: bool
+        """
+        return name in self._indexes
+
+    @read_transaction
+    def find(self, index=None, expression=None, limit=maxsize, txn=None, abort=False):
+        """
+        Find all records either sequential or based on an index
+
+        :param index: The name of the index to use [OR use natural order] 
+        :type index: str
+        :param expression: An optional filter expression
+        :type expression: function
+        :param limit: The maximum number of records to return
+        :type limit: int
+        :param txn: An optional transaction
+        :type txn: Transaction
+        :return: The next record (generator)
+        :rtype: dict
+        """
+
+        try:
+            cursor = None
+            if not index:
+                cursor = Cursor(self._db, txn)
+            else:
+                if index not in self._indexes:
+                    raise xIndexMissing(index)
+                index = self._indexes[index]
+                cursor = index.cursor(txn)
+            count = 0
+            first = True
+            while count < limit:
+                if not (cursor.first() if first else cursor.next()):
+                    break
+                first = False
+                record = cursor.value()
+                if index:
+                    key = record
+                    record = txn.get(record, db=self._db)
+                else:
+                    key = cursor.key()
+                record = loads(bytes(record))
+                if callable(expression) and not expression(record):
+                    continue
+                record['_id'] = key
+                yield record
+                count += 1
+
+        finally:
+            if cursor:
+                cursor.close()
+            if abort:
+                txn.abort()
+
+    @read_transaction
+    def range(self, index, lower=None, upper=None, inclusive=True, txn=None, abort=False):
+        """
+        Find all records with a key >= lower and <= upper. If you set inclusive to false the range
+        becomes key > lower and key < upper. Upper and/or Lower can be set to None, if lower is none
+        the range starts at the beginning of the table, and if upper is None searching will continue
+        to the end.
+
+        :param index: The name of the index to search
+        :type index: str
+        :param lower: A template record containing the lower end of the range
+        :type lower: dict
+        :param upper: A template record containing the upper end of the range
+        :type upper: dict
+        :param inclusive: Whether to include items at each boundary
+        :type inclusive: bool
+        :param txn: An optional transaction
+        :type txn: Transaction
+        :return: The records with keys within the specified range (generator)
+        :type: dict
+        """
+        try:
+            if not index:
+                with Cursor(self._db, txn) as cursor:
+                    def forward():
+                        if not cursor.next(): return False
+                        if upper and cursor.key() > upper: return False
+                        return True
+                    lower = lower['_id'] if lower else None
+                    upper = upper['_id'] if upper else None
+                    cursor.set_range(lower) if lower else cursor.first()
+                    while not inclusive and cursor.key() == lower:
+                        if not cursor.next() or cursor.key() == upper: return
+                    while True:
+                        key = cursor.key()
+                        if not key: break
+                        record = loads(bytes(cursor.value()))
+                        record['_id'] = key
+                        if not inclusive:
+                            if not forward(): break
+                            yield record
+                        else:
+                            yield record
+                            if not forward(): break
+            else:
+                if index not in self._indexes: raise xIndexMissing
+                index = self._indexes[index]
+                with index.cursor(txn) as cursor:
+                    def forward():
+                        if upper:
+                            if index.match(key, upper) or not index.set_next(cursor, upper): return False
+                        else:
+                            if not cursor.next(): return False
+                        return True
+                    if lower:
+                        index.set_range(cursor, lower)
+                        while not inclusive and index.match(cursor.key(), lower):
+                            if not index.set_next(cursor, upper): break
+                    else:
+                        if cursor.first() and not inclusive: cursor.next()
+                    while True:
+                        key = cursor.key()
+                        if not key: break
+                        record = txn.get(cursor.value(), db=self._db)
+                        if not record: raise xNotFound(cursor.value())
+                        record = loads(bytes(record))
+                        record['_id'] = cursor.value()
+                        if not inclusive:
+                            if not forward(): break
+                            yield record
+                        else:
+                            yield record
+                            if not forward(): break
+        finally:
+            if abort:
+                txn.abort()
+
+    @read_transaction
+    def get(self, key, txn=None, abort=False):
+        """
+        Get a single record based on it's key
+
+        :param key: The _id of the record to get
+        :type key: str
+        :return: The requested record
+        :rtype: dict
+        """
+        try:
+            record = txn.get(key, db=self._db)
+            if not record: return None
+            record = loads(bytes(record))
+            record['_id'] = key
+            return record
+
+        finally:
+            if abort:
+                txn.abort()
+
+    @write_transaction
+    def index(self, name, func=None, duplicates=False, txn=None):
+        """
+        Return a reference for a names index, or create if not available
+
+        :param name: The name of the index to create
+        :type name: str
+        :param func: A specification of the index, !<function>|<field name>
+        :type func: str
+        :param duplicates: Whether this index will allow duplicate keys
+        :type duplicates: bool
+        :param txn: An optional transaction
+        :type txn: Transaction
+        :return: A reference to the index, created index, or None if index creation fails
+        :rtype: Index
+        """
+        if name not in self._indexes:
+            conf = {
+                'key': _index_name(self, name),
+                'dupsort': duplicates,
+                'create': True,
+            }
+            self._indexes[name] = Index(self._ctx, name, func, conf, txn)
+            key = ''.join(['@', _index_name(self, name)]).encode()
+            val = dumps({'conf': conf, 'func': func}).encode()
+            if not txn.put(key, val): raise xWriteFail
+            self._reindex(name, txn)
+
+            if self._ctx.transaction:
+                self._ctx.transaction.index(name, func, duplicates)
+
+        return self._indexes[name]
+
+    @write_transaction
+    def reindex(self, txn):
+        """
+        Reindex all indexes for a given table
+        
+        :param name: Name of the table to reindex
+        :type name: str
+        :param txn: An optional transaction
+        :type txn: Trnsaction
+        """
+        for name in self._indexes:
+            self._reindex(name, txn)
+
+    def _reindex(self, name, txn):
+        """
+        Reindex an index
+
+        :param name: The name of the index to reindex
+        :type name: str
+        :param txn: An open transaction
+        :type txn: Transaction
+        :return: Number of index entries created
+        :rtype: int
+        """
+        if name not in self._indexes:
+            raise xIndexMissing
+        index = self._indexes[name]
+        if self._ctx.transaction:
+            self._ctx.transaction.reindex(self._name)
+
+        count = 0
+        self._indexes[name].empty(txn)
+
+        with Cursor(self._db, txn) as cursor:
+            if cursor.first():
+                while True:
+                    record = loads(bytes(cursor.value()))
+                    if index.put(txn, cursor.key().decode(), record):
+                        count += 1
+                    if not cursor.next():
+                        break
+        return count
+
+    @write_transaction
+    def save(self, record, txn):
+        """
+        Save an changes to a pre-existing record
+
+        :param record: The record to be saved
+        :type record: dict
+        :param txn: An open transaction
+        :type txn: Transaction
+        """
+        if not '_id' in record: raise xNoKey
+        key = record['_id']
+        rec = dict(record)
+        del rec['_id']
+
+        doc = txn.get(key, db=self._db)
+        if not doc: raise xWriteFail('old record is missing')
+        old = loads(bytes(doc))
+        if not txn.put(key, dumps(rec).encode(), db=self._db): raise xWriteFail('main record')
+        for name in self._indexes:
+            self._indexes[name].save(txn, key, old, rec)
+
+        if self._ctx.transaction:
+            self._ctx.transaction.update(self._name, key, rec)
+
+    @read_transaction
+    def seek(self, index, record, txn, abort=False):
+        """
+        Find all records matching the key in the specified index.
+
+        :param index: Name of the index to seek on
+        :type index: str
+        :param record: A template record containing the fields to search on
+        :type record: dict
+        :param txn: An optional transaction
+        :type txn: Transaction
+        :return: The records with matching keys (generator)
+        :type: dict
+        """
+        try:
+            index = self._indexes[index]
+            with index.cursor(txn) as cursor:
+                index.set_key(cursor, record)
+                while True:
+                    if not cursor.key():
+                        break
+                    key = cursor.value()
+                    record = txn.get(key, db=self._db)
+                    record = loads(bytes(record))
+                    record['_id'] = key
+                    yield record
+                    if not cursor.next_dup():
+                        break
+        finally:
+            if abort:
+                txn.abort()
+
+    @read_transaction
+    def seek_one(self, index, record, txn, abort=False):
+        """
+        Find the first records matching the key in the specified index.
+
+        :param index: Name of the index to seek on
+        :type index: str
+        :param record: A template record containing the fields to search on
+        :type record: dict
+        :return: The record with matching key
+        :type: dict
+        """
+        try:
+            index = self._indexes[index]
+            entry = index.get(txn, record)
+            if not entry: return None
+            record = txn.get(entry, db=self._db)
+            if not record: return None
+            record = loads(bytes(record))
+            record['_id'] = entry
+            return record
+        finally:
+            if abort:
+                txn.abort()
+
+    def _unindex(self, name, txn):
+        """
+        Delete the named index
+
+        :return: 
+        :param name: The name of the index
+        :type name: str
+        :param txn: An active transaction
+        :type txn: Transaction
+        :raises: lmdb_IndexMissing if the index does not exist
+        """
+        if name not in self._indexes:
+            raise xIndexMissing()
+
+        if name not in self._indexes: raise xIndexMissing
+        self._indexes[name].drop(txn)
+        del self._indexes[name]
+        if not txn.delete(''.join(['@', _index_name(self, name)]).encode()): raise xWriteFail
+
+        if self._ctx.transaction:
+            self._ctx.transaction.unindex(self._name, name)
+
+    @property
+    @read_transaction
+    def indexes(self, txn, abort=False):
+        """
+        Return a list of indexes for this table
+
+        :getter: The indexes for this table
+        :type: list
+        """
+        try:
+            results = []
+            index_name = _index_name(self, '')
+            pos = len(index_name)
+            db = self._ctx.env.open_db(txn=txn)
+            with Cursor(db, txn) as cursor:
+                if cursor.set_range(index_name.encode()):
+                    while True:
+                        name = cursor.key().decode()
+                        if not name.startswith(index_name) or not cursor.next():
+                            break
+                        results.append(name[pos:])
+            return results
+        finally:
+            if abort: txn.abort()
+
+    @property
+    @read_transaction
+    def records(self, txn=None, abort=False):
+        """
+        Return the number of records in this table
+
+        :getter: Record count
+        :type: int
+        """
+        try:
+            return txn.stat(self._db).get('entries', 0)
+        finally:
+            if abort:
+                txn.abort()
+
 
 class Index(object):
     """
     Mapping for table indecies, this is version #2 with a much simplified indexing scheme.
     
-    :param env: An LMDB Environment object
-    :type env: Environment
+    :param context: A reference to the controlling Database object
+    :type context: Database
     :param name: The name of the index we're working with
     :type name: str
     :param func: Is a Python format string that specified the index layout
@@ -245,29 +864,30 @@ class Index(object):
     """
     _debug = False
 
-    def __init__(self, context, name, func, conf):
-        self._context = context
+    def __init__(self, ctx, name, func, conf, txn):
+        self._ctx = ctx
         self._name = name
         self._conf = conf
         self._conf['key'] = self._conf['key'].encode()
         self._func = _anonymous('(r): return "{}".format(**r).encode()'.format(func))
-        self._db = self._context.environment.open_db(**self._conf)
+        self._db = self._ctx.env.open_db(**self._conf, txn=txn)
 
-    def count(self, txn=None):
+    @read_transaction
+    def count(self, txn=None, abort=False):
         """
         Count the number of items currently present in this index
         
+        :param txn: Is an open Transaction 
         :param txn: Is an open Transaction 
         :type txn: Transaction
         :return: The number if items in the index
         :rtype: int
         """
-        def entries():
+        try:
             return txn.stat(self._db).get('entries', 0)
-        if txn:
-            return entries()
-        with self._context.environment.begin() as txn:
-            return entries()
+        finally:
+            if abort:
+                txn.abort()
 
     def cursor(self, txn):
         """
@@ -409,450 +1029,6 @@ class Index(object):
         if old_key != new_key:
             if not txn.delete(old_key, key, db=self._db): raise xReindexNoKey1
             if not txn.put(new_key, key, db=self._db): raise xReindexNoKey2
-
-    def reindex(self, db, txn=None):
-        """
-        Reindex the current index, rec
-         
-        :param db: A handle to the database table to index
-        :type db: database handle
-        :param txn: An open transaction
-        :type txn: Transaction
-        :return: Number of index entries created
-        :rtype: int
-        """
-        def worker():
-            count = 0
-            self.empty(txn)
-            with Cursor(db, txn) as cursor:
-                if cursor.first():
-                    while True:
-                        record = loads(bytes(cursor.value()))
-                        if self.put(txn, cursor.key().decode(), record):
-                            count += 1
-                        if not cursor.next():
-                            break
-            return count
-
-        if txn:
-            return worker()
-        with self._context.environment.begin(write=True) as txn:
-            try:
-                return worker()
-            except Exception as error:
-                txn.abort()
-                raise error
-
-class Table(object):
-    """
-    Representation of a database table
-
-    :param env: An open database Environment
-    :type env: Environment
-    :param name: A table name
-    :type name: str   
-    """
-    _debug = False
-    _indexes = {}
-
-    def __init__(self, context, name=None):
-        self._context = context
-        self._name = name
-        self._indexes = {}
-        txn = self._txn = self._context.transaction
-        self._db = self._context.environment.open_db(name.encode(), txn=self._txn)
-        for index in self.indexes:
-            key = ''.join(['@', _index_name(self, index)]).encode()
-            #with self._context.environment.begin() as txn:
-            #txn = self._context.transaction
-            doc = loads(bytes(txn.get(key)))
-            self._indexes[index] = Index(context, index, doc['func'], doc['conf'])
-
-    def append(self, record, txn=None):
-        """
-        Append a new record to this table
-        
-        :param record: The record to append
-        :type record: dict
-        :param txn: An open transaction
-        :type txn: Transaction
-        :raises: xWriteFail on write error
-        """
-        def worker():
-            key = str(record.get('_id', ObjectId()))
-            if not txn.put(key.encode(), dumps(record).encode(), db=self._db, append=True): raise xWriteFail(key)
-            record['_id'] = key.encode()
-            for name in self._indexes:
-                if not self._indexes[name].put(txn, key, record): raise xWriteFail(name)
-
-        if self._context.transaction:
-            txn = self._context.transaction
-            worker()
-            return
-        with self._context.environment.begin(write=True) as txn:
-            worker()
-
-    def delete(self, keys):
-        """
-        Delete a record from this table
-        
-        :param keys: A list of database keys to delete
-        :type keys: list
-        """
-        if not isinstance(keys, list):
-            keys = [keys]
-        with self._context.environment.begin(write=True) as txn:
-            try:
-                for key in keys:
-                    doc = loads(bytes(txn.get(key, db=self._db)))
-                    if not txn.delete(key, db=self._db): raise xWriteFail
-                    for name in self._indexes:
-                        if not self._indexes[name].delete(txn, key, doc): raise xWriteFail
-            except Exception as error:
-                txn.abort()
-                raise error
-
-    def drop(self, delete=True, txn=None):
-        """
-        Drop this tablex and all it's indecies
-
-        :param delete: Whether we delete the table after removing all items
-        :type delete: bool
-        """
-        def worker():
-            for name in self.indexes:
-                if delete:
-                    self.unindex(name, txn)
-                else:
-                    self._indexes[name].empty(txn)
-            txn.drop(self._db, delete)
-
-        if txn:
-            worker()
-            return
-        with self._context.environment.begin(write=True) as txn:
-            worker()
-
-    def empty(self, txn=None):
-        """
-        Clear all records from the current table
-
-        :return: True if the table was cleared
-        :rtype: bool
-        """
-        return self.drop(False, txn)
-
-    def exists(self, name):
-        """
-        See whether an index already exists or not
-
-        :param name: Name of the index
-        :type name: str
-        :return: True if index already exists
-        :rtype: bool
-        """
-        return name in self._indexes
-
-    def find(self, index=None, expression=None, limit=maxsize):
-        """
-        Find all records either sequential or based on an index
-
-        :param index: The name of the index to use [OR use natural order] 
-        :type index: str
-        :param expression: An optional filter expression
-        :type expression: function
-        :param limit: The maximum number of records to return
-        :type limit: int
-        :return: The next record (generator)
-        :rtype: dict
-        """
-        with self._context.environment.begin() as txn:
-            if not index:
-                cursor = Cursor(self._db, txn)
-            else:
-                if index not in self._indexes:
-                    raise xIndexMissing(index)
-                index = self._indexes[index]
-                cursor = index.cursor(txn)
-            count = 0
-            first = True
-            while count < limit:
-                if not (cursor.first() if first else cursor.next()):
-                    break
-                first = False
-                record = cursor.value()
-                if index:
-                    key = record
-                    record = txn.get(record, db=self._db)
-                else:
-                    key = cursor.key()
-                record = loads(bytes(record))
-                if callable(expression) and not expression(record):
-                    continue
-                record['_id'] = key
-                yield record
-                count += 1
-
-            cursor.close()
-
-    def range(self, index, lower=None, upper=None, inclusive=True):
-        """
-        Find all records with a key >= lower and <= upper. If you set inclusive to false the range
-        becomes key > lower and key < upper. Upper and/or Lower can be set to None, if lower is none
-        the range starts at the beginning of the table, and if upper is None searching will continue
-        to the end.
-
-        :param index: The name of the index to search
-        :type index: str
-        :param lower: A template record containing the lower end of the range
-        :type lower: dict
-        :param upper: A template record containing the upper end of the range
-        :type upper: dict
-        :param inclusive: Whether to include items at each boundary
-        :type inclusive: bool
-        :return: The records with keys within the specified range (generator)
-        :type: dict
-        """
-        with self._context.environment.begin() as txn:
-            if not index:
-                with Cursor(self._db, txn) as cursor:
-
-                    def forward():
-                        if not cursor.next(): return False
-                        if upper and cursor.key() > upper: return False
-                        return True
-
-                    lower = lower['_id'] if lower else None
-                    upper = upper['_id'] if upper else None
-                    cursor.set_range(lower) if lower else cursor.first()
-                    while not inclusive and cursor.key() == lower:
-                        if not cursor.next() or cursor.key() == upper: return
-                    while True:
-                        key = cursor.key()
-                        if not key: break
-                        record = loads(bytes(cursor.value()))
-                        record['_id'] = key
-                        if not inclusive:
-                            if not forward(): break
-                            yield record
-                        else:
-                            yield record
-                            if not forward(): break
-
-            else:
-                if index not in self._indexes: raise xIndexMissing
-                index = self._indexes[index]
-                with index.cursor(txn) as cursor:
-
-                    def forward():
-                        if upper:
-                            if index.match(key, upper) or not index.set_next(cursor, upper): return False
-                        else:
-                            if not cursor.next(): return False
-                        return True
-
-                    if lower:
-                        index.set_range(cursor, lower)
-                        while not inclusive and index.match(cursor.key(), lower):
-                            if not index.set_next(cursor, upper): break
-                    else:
-                        if cursor.first() and not inclusive: cursor.next()
-                    while True:
-                        key = cursor.key()
-                        if not key: break
-                        record = txn.get(cursor.value(), db=self._db)
-                        if not record: raise xNotFound(cursor.value())
-                        record = loads(bytes(record))
-                        record['_id'] = cursor.value()
-                        if not inclusive:
-                            if not forward(): break
-                            yield record
-                        else:
-                            yield record
-                            if not forward(): break
-
-    def get(self, key):
-        """
-        Get a single record based on it's key
-        
-        :param key: The _id of the record to get
-        :type key: str
-        :return: The requested record
-        :rtype: dict
-        """
-        with self._context.environment.begin() as txn:
-            record = txn.get(key, db=self._db)
-            if not record: return None
-            record = loads(bytes(record))
-            record['_id'] = key
-            return record
-
-    def index(self, name, func=None, duplicates=False):
-        """
-        Return a reference for a names index, or create if not available
-
-        :param name: The name of the index to create
-        :type name: str
-        :param func: A specification of the index, !<function>|<field name>
-        :type func: str
-        :param duplicates: Whether this index will allow duplicate keys
-        :type duplicates: bool
-        :return: A reference to the index, created index, or None if index creation fails
-        :rtype: Index
-        :raises: lmdb_Aborted on error
-        """
-        if name not in self._indexes:
-            conf = {
-                'key': _index_name(self, name),
-                'dupsort': duplicates,
-                'create': True,
-            }
-            self._indexes[name] = Index(self._context, name, func, conf)
-            with self._context.environment.begin(write=True) as txn:
-                try:
-                    key = ''.join(['@', _index_name(self, name)]).encode()
-                    val = dumps({'conf': conf, 'func': func}).encode()
-                    if not txn.put(key, val): raise xWriteFail
-                    self._indexes[name].reindex(self._db, txn)
-                except Exception as error:
-                    txn.abort()
-                    raise error
-
-        return self._indexes[name]
-
-    def save(self, record, txn=None):
-        """
-        Save an changes to a pre-existing record
-
-        :param record: The record to be saved
-        :type record: dict
-        :param txn: An open transaction
-        :type txn: Transaction
-        """
-
-        def worker():
-            if not '_id' in record: raise xNoKey
-            key = record['_id']
-            rec = dict(record)
-            del rec['_id']
-            doc = txn.get(key, db=self._db)
-            if not doc: raise xWriteFail('old record is missing')
-            old = loads(bytes(doc))
-            if not txn.put(key, dumps(rec).encode(), db=self._db): raise xWriteFail('main record')
-            for name in self._indexes:
-                self._indexes[name].save(txn, key, old, rec)
-
-        if txn:
-            worker()
-            return
-        with self._context.environment.begin(write=True) as txn:
-            worker()
-
-    def seek(self, index, record):
-        """
-        Find all records matching the key in the specified index.
-        
-        :param index: Name of the index to seek on
-        :type index: str
-        :param record: A template record containing the fields to search on
-        :type record: dict
-        :return: The records with matching keys (generator)
-        :type: dict
-        """
-        with self._context.environment.begin() as txn:
-            index = self._indexes[index]
-            with index.cursor(txn) as cursor:
-                index.set_key(cursor, record)
-                while True:
-                    if not cursor.key():
-                        break
-                    key = cursor.value()
-                    record = txn.get(key, db=self._db)
-                    record = loads(bytes(record))
-                    record['_id'] = key
-                    yield record
-                    if not cursor.next_dup():
-                        break
-
-    def seek_one(self, index, record):
-        """
-        Find the first records matching the key in the specified index.
-
-        :param index: Name of the index to seek on
-        :type index: str
-        :param record: A template record containing the fields to search on
-        :type record: dict
-        :return: The record with matching key
-        :type: dict
-        """
-        with self._context.environment.begin() as txn:
-            index = self._indexes[index]
-            entry = index.get(txn, record)
-            if not entry: return None
-            record = txn.get(entry, db=self._db)
-            if not record: return None
-            record = loads(bytes(record))
-            record['_id'] = entry
-            return record
-
-    def unindex(self, name, txn=None):
-        """
-        Delete the named index
-
-        :return: 
-        :param name: The name of the index
-        :type name: str
-        :param txn: An active transaction
-        :type txn: Transaction
-        :raises: lmdb_IndexMissing if the index does not exist
-        """
-        if name not in self._indexes:
-            raise xIndexMissing()
-
-        def worker():
-            if name not in self._indexes: raise xIndexMissing
-            self._indexes[name].drop(txn)
-            del self._indexes[name]
-            if not txn.delete(''.join(['@', _index_name(self, name)]).encode()): raise xWriteFail
-
-        if txn:
-            worker()
-            return
-        with self._context.environment.begin(write=True) as txn:
-            worker()
-
-    @property
-    def indexes(self):
-        """
-        PROPERTY - Recover a list of indexes for this table
-
-        :getter: The indexes for this table
-        :type: list
-        """
-        results = []
-        index_name = _index_name(self, '')
-        pos = len(index_name)
-        with self._context.environment.begin() as txn:
-            db = self._context.environment.open_db()
-            with Cursor(db, txn) as cursor:
-                if cursor.set_range(index_name.encode()):
-                    while True:
-                        name = cursor.key().decode()
-                        if not name.startswith(index_name) or not cursor.next():
-                            break
-                        results.append(name[pos:])
-        return results
-
-    @property
-    def records(self):
-        """
-        PROPERTY - Recover the number of records in this table
-
-        :getter: Record count
-        :type: int
-        """
-        with self._context.environment.begin() as txn:
-            return txn.stat(self._db).get('entries', 0)
 
 
 def _debug(self, msg):

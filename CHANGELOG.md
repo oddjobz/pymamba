@@ -1,3 +1,9 @@
+### Version 0.2
+
+* Restructuring in advance of replication code
+* Made table.drop private
+* Moved reindex from Index to Table
+
 ### Version 0.1.35
 
 * Fixed bug in 'seek' where the index key rather than the primary key was returned in the record body

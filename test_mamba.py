@@ -2,7 +2,8 @@
 
 import unittest
 import lmdb
-from pymamba import Database, _debug, xIndexMissing, xWriteFail
+from pymamba import Database, Table, Index, _debug, xIndexMissing, \
+    xWriteFail, xTableMissing
 from subprocess import call
 
 
@@ -28,10 +29,9 @@ class UnitTests(unittest.TestCase):
         pass
 
     def generate_data(self, db, table_name):
-        with db.begin():
-            table = db.table(table_name)
-            for row in self._data:
-                table.append(dict(row))
+        table = db.table(table_name)
+        for row in self._data:
+            table.append(dict(row))
 
     def generate_data2(self, db, table_name):
         with db.begin():
@@ -39,24 +39,59 @@ class UnitTests(unittest.TestCase):
             for row in self._data:
                 table.append(dict(row))
 
-    def test_00_xxx(self):
+    def test_01_open_database(self):
         db = Database(self._db_name)
-        self.generate_data(db, self._tb_name)
-        exit(0)
+        self.assertTrue(isinstance(db, Database))
 
-    def xtest_01_basic(self):
+    def test_02_create_table(self):
         db = Database(self._db_name)
-        self.assertEqual(db.tables, [])
-
-    def xtest_02_create_drop(self):
-        db = Database(self._db_name)
-        self.assertEqual(db.tables, [])
         table = db.table(self._tb_name)
-        self.assertEqual(db.tables, [self._tb_name])
+        self.assertTrue(isinstance(table, Table))
+
+    def test_03_tables(self):
+        db = Database(self._db_name)
+        db.table(self._tb_name)
+        self.assertEqual(db.tables, ['demo1'])
+
+    def test_04_exists(self):
+        db = Database(self._db_name)
+        db.table(self._tb_name)
+        self.assertTrue(db.exists('demo1'))
+
+    def test_05_drop(self):
+        db = Database(self._db_name)
+        db.table(self._tb_name)
         db.drop(self._tb_name)
+        self.assertFalse(db.exists('demo1'))
         self.assertEqual(db.tables, [])
 
-    def xtest_03_create_drop_index(self):
+    def test_06_append(self):
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        for doc in self._data:
+            table.append(dict(doc))
+        self.assertEqual(table.records, len(self._data))
+
+    def test_07_empty(self):
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        for doc in self._data:
+            table.append(dict(doc))
+        self.assertEqual(table.records, len(self._data))
+        table.empty()
+        self.assertEqual(table.records, 0)
+        self.assertTrue(db.exists('demo1'))
+
+    def test_08_delete(self):
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        for doc in self._data:
+            table.append(dict(doc))
+        doc = next(table.find(limit=1))
+        table.delete(doc)
+        self.assertEqual(table.records, len(self._data)-1)
+
+    def test_09_create_drop_index(self):
         db = Database(self._db_name)
         table = db.table(self._tb_name)
         table.index('by_name', '{name}')
@@ -65,10 +100,9 @@ class UnitTests(unittest.TestCase):
         db.drop(self._tb_name)
         self.assertEqual(db.tables, [])
 
-    def xtest_04_put_data(self):
+    def test_10_put_data(self):
 
         people = {}
-
         db = Database(self._db_name)
         table = db.table(self._tb_name)
         table.index('by_name', '{name}')
@@ -139,7 +173,7 @@ class UnitTests(unittest.TestCase):
         db.drop(self._tb_name)
         self.assertEqual(db.tables, [])
 
-    def xtest_20_compound_index(self):
+    def test_11_compound_index(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -152,12 +186,10 @@ class UnitTests(unittest.TestCase):
         for row in table.find('by_age_name'):
             self.assertEqual(row['age'], ages.pop())
 
-        with self.assertRaises(lmdb.Error):
+        with self.assertRaises(ValueError):
             table.index('broken', '{')
-        #print(db.tables)
-        #db.drop(self._tb_name)
 
-    def xtest_21_table_reopen(self):
+    def test_12_table_reopen(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -170,17 +202,7 @@ class UnitTests(unittest.TestCase):
         table = db.table(self._tb_name)
         self.assertEqual(['by_age', 'by_age_name', 'by_name'], table.indexes)
 
-    def xtest_22_table_exists(self):
-
-        db = Database(self._db_name)
-        table = db.table(self._tb_name)
-        self.assertTrue(db.exists(self._tb_name))
-
-    def xtest_23_try_debug(self):
-
-        _debug(self, 'We are here!')
-
-    def xtest_24_index_exists(self):
+    def test_13_index_exists(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -193,7 +215,7 @@ class UnitTests(unittest.TestCase):
         table = db.table(self._tb_name)
         self.assertTrue(table.exists('by_name'))
 
-    def xtest_25_table_empty(self):
+    def test_14_table_empty(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -206,7 +228,7 @@ class UnitTests(unittest.TestCase):
         table = db.table(self._tb_name)
         self.assertEqual(table.records, 0)
 
-    def xtest_26_check_append_exception(self):
+    def test_15_check_append_exception(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -222,42 +244,41 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(before, after)
 
 
-    def xtest_28_check_delete_exception(self):
+    def test_16_check_delete_exception(self):
 
         class f(object):
             pass
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        with self.assertRaises(lmdb.Error):
+        with self.assertRaises(TypeError):
             table.delete([f])
 
-    def xtest_29_check_drop_exception(self):
+    def test_17_check_drop_exception(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
-        with self.assertRaises(TypeError):
-            table._db = None
-            table.drop()
+        with self.assertRaises(xTableMissing):
+            db.drop('no table')
 
-    def xtest_29_check_unindex_exception(self):
+    def test_18_check_unindex_exception(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
         with self.assertRaises(xIndexMissing):
-            table.unindex('fred')
+            table.drop_index('fred')
 
         table.index('by_name', '{name}')
         self.assertTrue('by_name' in table.indexes)
-        table.unindex('by_name')
+        table.drop_index('by_name')
         self.assertFalse('by_name' in table.indexes)
 
         table.index('duff', '{name}')
         table._indexes['duff'] = None
         with self.assertRaises(AttributeError):
-            table.unindex('duff')
+            table.drop_index('duff')
 
-    def xtest_30_count_with_txn(self):
+    def test_18_count_with_txn(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -265,11 +286,11 @@ class UnitTests(unittest.TestCase):
         table.index('by_name', '{name}')
         table.index('by_age', '{age:03}', duplicates=True)
         self.generate_data(db, self._tb_name)
-        with db._env.begin() as txn:
+        with db.env.begin() as txn:
             index = table.index('by_name')
-            self.assertTrue(index.count(txn), 7)
+            self.assertTrue(index.count(txn=txn), 7)
 
-    def xtest_31_index_get(self):
+    def test_31_index_get(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -286,7 +307,7 @@ class UnitTests(unittest.TestCase):
         with self.assertRaises(xIndexMissing):
             list(table.find('fred', 'fred'))
 
-    def xtest_32_filters(self):
+    def test_32_filters(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -304,7 +325,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(result['name'], 'John Doe')
 
 
-    def xtest_33_reindex(self):
+    def test_33_reindex(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -312,19 +333,16 @@ class UnitTests(unittest.TestCase):
         by_age_name = table.index('by_age_name', '{age:03}{name}')
         by_name = table.index('by_name', '{name}')
         by_age = table.index('by_age', '{age:03}', duplicates=True)
-        self.assertEqual(by_age_name.count(), 7)
-        self.assertEqual(by_name.count(), 7)
-        self.assertEqual(by_age.count(), 7)
-        by_age_name.reindex(table._db)
-        by_name.reindex(table._db)
-        by_age.reindex(table._db)
-        self.assertEqual(by_age_name.count(), 7)
-        self.assertEqual(by_name.count(), 7)
-        self.assertEqual(by_age.count(), 7)
-        with self.assertRaises(lmdb.Error):
-            by_age.reindex(None)
 
-    def xtest_34_function_index(self):
+        self.assertEqual(by_age_name.count(), 7)
+        self.assertEqual(by_name.count(), 7)
+        self.assertEqual(by_age.count(), 7)
+        table.reindex()
+        self.assertEqual(by_age_name.count(), 7)
+        self.assertEqual(by_name.count(), 7)
+        self.assertEqual(by_age.count(), 7)
+
+    def test_34_function_index(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -375,7 +393,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(list(table.find('by_compound'))[0]['name'], '!Squizzey')
         self.assertEqual(list(table.find('by_age'))[0]['age'], 1)
 
-    def xtest_35_partial_index(self):
+    def test_35_partial_index(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -392,7 +410,7 @@ class UnitTests(unittest.TestCase):
         with self.assertRaises(AttributeError):
             table.unindex('by_admin', 123)
 
-    def xtest_36_seek_one(self):
+    def test_36_seek_one(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -403,7 +421,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(doc['name'], 'Squizzey')
         print("!!!", doc)
 
-    def xtest_37_drop_reuse(self):
+    def test_37_drop_reuse(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -419,14 +437,16 @@ class UnitTests(unittest.TestCase):
             _id = doc['_id']
             name = doc['name']
             break
-        db.restructure(self._tb_name)
+        with db.begin():
+            db.restructure(self._tb_name)
         table = db.table(self._tb_name)
         for doc in table.find():
+            print(doc)
             self.assertEqual(doc['name'], name)
-            self.assertNotEqual(doc['_id'], _id)
+            self.assertEqual(doc['_id'], _id)
             break
 
-    def xtest_38_range(self):
+    def test_38_range(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
