@@ -337,14 +337,13 @@ class Database(object):
         if dst_name in self.tables: raise xTableExists
         dst = self.table(dst_name)
         for doc in src.find():
-            print(doc)
-        #    dst.append(doc, txn)
+            dst.append(doc, txn=txn)
 
-        #src.empty(txn)
-        #for doc in dst.find(txn=txn):
-        #    src.append(doc, txn)
-        #dst.drop(True, txn)
-        #del self._tables[dst_name]
+        src.empty(txn=txn)
+        for doc in dst.find(txn=txn):
+            src.append(doc, txn=txn)
+        dst._drop(txn=txn)
+        del self._tables[dst_name]
 
     def table(self, name):
         """
@@ -396,7 +395,14 @@ class Table(object):
         :type txn: Transaction
         :raises: xWriteFail on write error
         """
-        key = str(record.get('_id', ObjectId()))
+        if not '_id' in record:
+            key = str(ObjectId())
+        else:
+            key = record['_id']
+            if isinstance(key, int):
+                key = str(key)
+            else:
+                key = str(key.decode())
         if not txn.put(key.encode(), dumps(record).encode(), db=self._db, append=True): raise xWriteFail(key)
         record['_id'] = key.encode()
         for name in self._indexes:
@@ -442,6 +448,8 @@ class Table(object):
         """
         for name in self.indexes:
             self._unindex(name, txn)
+        if self._ctx.transaction:
+            self._ctx.transaction.drop(self._name)
         return txn.drop(self._db, True)
 
     @write_transaction
@@ -465,6 +473,8 @@ class Table(object):
         """
         for name in self.indexes:
             self._indexes[name].empty(txn)
+        if self._ctx.transaction:
+            self._ctx.transaction.empty(self._name)
         txn.drop(self._db, False)
 
     def exists(self, name):
@@ -717,7 +727,6 @@ class Table(object):
         key = record['_id']
         rec = dict(record)
         del rec['_id']
-
         doc = txn.get(key, db=self._db)
         if not doc: raise xWriteFail('old record is missing')
         old = loads(bytes(doc))

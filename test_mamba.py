@@ -31,12 +31,24 @@ class UnitTests(unittest.TestCase):
     def generate_data(self, db, table_name):
         table = db.table(table_name)
         for row in self._data:
+            if '_id' in row:
+                del row['_id']
             table.append(dict(row))
+
+    def generate_data1(self, db, table_name):
+        with db.env.begin(write=True) as txn:
+            table = db.table(table_name)
+            for row in self._data:
+                if '_id' in row:
+                    del row['_id']
+                table.append(dict(row), txn=txn)
 
     def generate_data2(self, db, table_name):
         with db.begin():
             table = db.table(table_name)
             for row in self._data:
+                if '_id' in row:
+                    del row['_id']
                 table.append(dict(row))
 
     def test_01_open_database(self):
@@ -278,7 +290,7 @@ class UnitTests(unittest.TestCase):
         with self.assertRaises(AttributeError):
             table.drop_index('duff')
 
-    def test_18_count_with_txn(self):
+    def test_19_count_with_txn(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -290,7 +302,7 @@ class UnitTests(unittest.TestCase):
             index = table.index('by_name')
             self.assertTrue(index.count(txn=txn), 7)
 
-    def test_31_index_get(self):
+    def test_20_index_get(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -307,7 +319,7 @@ class UnitTests(unittest.TestCase):
         with self.assertRaises(xIndexMissing):
             list(table.find('fred', 'fred'))
 
-    def test_32_filters(self):
+    def test_21_filters(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -325,7 +337,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(result['name'], 'John Doe')
 
 
-    def test_33_reindex(self):
+    def test_22_reindex(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -342,7 +354,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(by_name.count(), 7)
         self.assertEqual(by_age.count(), 7)
 
-    def test_34_function_index(self):
+    def test_23_function_index(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -357,7 +369,7 @@ class UnitTests(unittest.TestCase):
 
         table.empty()
         table = db.table(self._tb_name)
-        self.generate_data2(db, self._tb_name)
+        self.generate_data(db, self._tb_name)
 
         results = []
         for doc in table.find('by_compound'):
@@ -365,7 +377,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(results, ['A', 'A', 'A', 'B', 'B', 'B', 'B'])
 
         for i in table.seek('by_compound', {'cat': 'A', 'name': 'Squizzey'}):
-            print("}}}",i)
+            #print("}}}",i)
             self.assertEqual(i['age'], 3000)
 
         for i in table.seek('by_compound', {'cat': 'B', 'name': 'John Doe'}):
@@ -381,7 +393,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(results[0]['name'], 'Squizzey')
         self.assertEqual(results[1]['name'], 'Gareth Bult1')
 
-        print(results[0])
+        #print(results[0])
         results[0]['name'] = '!Squizzey'
         results[0]['age'] = 1
         table.save(results[0])
@@ -393,15 +405,15 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(list(table.find('by_compound'))[0]['name'], '!Squizzey')
         self.assertEqual(list(table.find('by_age'))[0]['age'], 1)
 
-    def test_35_partial_index(self):
+    def test_24_partial_index(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
         self.generate_data(db, self._tb_name)
         table.index('by_admin', '{admin}', duplicates=True)
         try:
-            for doc in table.find('by_admin'):
-                print("> {admin}".format(**doc), doc)
+            for doc in table.find('by_admin'): pass
+                #print("> {admin}".format(**doc), doc)
         except Exception as error:
             self.fail('partial key failure')
             raise error
@@ -410,7 +422,7 @@ class UnitTests(unittest.TestCase):
         with self.assertRaises(AttributeError):
             table.unindex('by_admin', 123)
 
-    def test_36_seek_one(self):
+    def test_25_seek_one(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -419,9 +431,8 @@ class UnitTests(unittest.TestCase):
         doc = table.seek_one('by_age', {'age': 3000})
         self.assertEqual(doc['age'], 3000)
         self.assertEqual(doc['name'], 'Squizzey')
-        print("!!!", doc)
 
-    def test_37_drop_reuse(self):
+    def test_26_drop_reuse(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -441,12 +452,12 @@ class UnitTests(unittest.TestCase):
             db.restructure(self._tb_name)
         table = db.table(self._tb_name)
         for doc in table.find():
-            print(doc)
+            #print(doc)
             self.assertEqual(doc['name'], name)
             self.assertEqual(doc['_id'], _id)
             break
 
-    def test_38_range(self):
+    def test_28_range(self):
 
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -471,7 +482,7 @@ class UnitTests(unittest.TestCase):
         res = list(table.find())
         lower = res[0]['_id']
         upper = res[-1]['_id']
-        print('Lower={} Upper={}'.format(lower, upper))
+        #print('Lower={} Upper={}'.format(lower, upper))
         natural = list(table.range(None, {'_id': lower}, {'_id': upper}))
         self.assertEqual(natural[0]['code'], 'F')
         self.assertEqual(natural[-1]['code'], 'A')
@@ -479,10 +490,10 @@ class UnitTests(unittest.TestCase):
         res = list(table.find())
         lower = res[0]['_id']
         upper = res[-2]['_id']
-        print('Lower={} Upper={}'.format(lower, upper))
+        #print('Lower={} Upper={}'.format(lower, upper))
         natural = list(table.range(None, {'_id': lower}, {'_id': upper}))
-        for doc in natural:
-            print(doc)
+        #for doc in natural:
+        #    print(doc)
 
         self.assertEqual(natural[0]['code'], 'F')
         self.assertEqual(natural[-1]['code'], 'B')
@@ -490,10 +501,10 @@ class UnitTests(unittest.TestCase):
         res = list(table.find())
         lower = res[0]['_id']
         upper = res[-1]['_id']
-        print('Lower={} Upper={}'.format(lower, upper))
+        #print('Lower={} Upper={}'.format(lower, upper))
         natural = list(table.range(None, {'_id': lower}, {'_id': upper}, inclusive=False))
-        for doc in natural:
-            print(doc)
+        #for doc in natural:
+        #    print(doc)
 
         self.assertEqual(natural[0]['code'], 'E')
         self.assertEqual(natural[-1]['code'], 'B')
@@ -502,7 +513,7 @@ class UnitTests(unittest.TestCase):
         res = list(table.find())
         lower = None
         upper = res[-1]['_id']
-        print('Lower={} Upper={}'.format(lower, upper))
+        #print('Lower={} Upper={}'.format(lower, upper))
         natural = list(table.range(None, {'_id': lower}, {'_id': upper}))
         self.assertEqual(natural[0]['code'], 'F')
         self.assertEqual(natural[-1]['code'], 'A')
@@ -578,3 +589,26 @@ class UnitTests(unittest.TestCase):
         #    print(doc)
 
 
+    def test_29_with_txn(self):
+
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        self.generate_data1(db, self._tb_name)
+        self.generate_data2(db, self._tb_name)
+        with db.begin():
+            with self.assertRaises(xIndexMissing):
+                next(table.find('123'))
+        with db.begin():
+            docs = list(table.find())
+            doc = docs[0]
+            table.delete(doc)
+            doc = docs[1]
+            print("+", doc)
+            doc['age'] += 1
+            table.save(doc)
+            db.drop('demo1')
+        #table.index('by_age', '{age:03}', duplicates=True)
+        #doc = table.seek_one('by_age', {'age': 3000})
+        #self.assertEqual(doc['age'], 3000)
+        #self.assertEqual(doc['name'], 'Squizzey')
+        #print("!!!", doc)
