@@ -52,9 +52,13 @@ __version__ = '0.1.35'
 
 def read_transaction(func):
     def wrapped_f(*args, **kwargs):
-        if 'txn' not in kwargs:
-            kwargs['txn'] = args[0]._ctx.env.begin()
-            kwargs['abort'] = True
+        if 'txn' in kwargs:
+            return func(*args, **kwargs)
+        if args[0]._ctx.transaction:
+            kwargs['txn'] = args[0]._ctx.transaction.txn
+            return func(*args, **kwargs)
+        kwargs['txn'] = args[0]._ctx.env.begin()
+        kwargs['abort'] = True
         return func(*args, **kwargs)
     return wrapped_f
 
@@ -102,11 +106,11 @@ class DBTransaction(object):
         """
         if txn_type is None:
             self._txn.commit()
+            print('Replicate:')
+            print(self.txns)
         else:
             self._txn.abort()
 
-        print('Replicate:')
-        print(self.txns)
         self.end()
 
     def append(self, table, record):
@@ -244,9 +248,9 @@ class Database(object):
         """
         return self._transaction
 
-    @property
-    def txn(self):
-        return self._transaction.txn if self._transaction else None
+    #@property
+    #def txn(self):
+    #    return self._transaction.txn if self._transaction else None
 
     def begin(self):
         """
@@ -297,17 +301,27 @@ class Database(object):
         :getter: Returns a list of table names
         :type: list
         """
-        result = []
-        with self._env.begin() as txn:
+        if self.transaction:
+            txn = self.transaction.txn
+            abort = False
+        else:
+            txn = self.env.begin()
+            abort = True
+
+        try:
+            result = []
             with Cursor(self._db, txn) as cursor:
                 if cursor.first():
                     while True:
                         name = cursor.key().decode()
-                        if name[0] not in ['_', '@'] and not all:
+                        if all or name[0] not in ['_', '@']:
                             result.append(name)
                         if not cursor.next():
                             break
-        return result
+            return result
+        finally:
+            if abort:
+                txn.abort()
 
     def drop(self, name):
         """
@@ -666,7 +680,7 @@ class Table(object):
             self._reindex(name, txn)
 
             if self._ctx.transaction:
-                self._ctx.transaction.index(name, func, duplicates)
+                self._ctx.transaction.index(self._name, name, func, duplicates)
 
         return self._indexes[name]
 
@@ -694,11 +708,10 @@ class Table(object):
         :return: Number of index entries created
         :rtype: int
         """
-        if name not in self._indexes:
-            raise xIndexMissing
+        if name not in self._indexes: raise xIndexMissing
         index = self._indexes[name]
-        if self._ctx.transaction:
-            self._ctx.transaction.reindex(self._name)
+        #if self._ctx.transaction:
+        #    self._ctx.transaction.reindex(self._name)
 
         count = 0
         self._indexes[name].empty(txn)
@@ -805,8 +818,7 @@ class Table(object):
         :type txn: Transaction
         :raises: lmdb_IndexMissing if the index does not exist
         """
-        if name not in self._indexes:
-            raise xIndexMissing()
+        if name not in self._indexes: raise xIndexMissing
 
         if name not in self._indexes: raise xIndexMissing
         self._indexes[name].drop(txn)
@@ -882,7 +894,7 @@ class Index(object):
         self._db = self._ctx.env.open_db(**self._conf, txn=txn)
 
     @read_transaction
-    def count(self, txn=None, abort=False):
+    def count(self, txn, abort=False):
         """
         Count the number of items currently present in this index
         
@@ -1040,19 +1052,19 @@ class Index(object):
             if not txn.put(new_key, key, db=self._db): raise xReindexNoKey2
 
 
-def _debug(self, msg):
-    """
-    Display a debug message with current line number and function name
-
-    :param self: A reference to the object calling this routine
-    :type self: object
-    :param msg: The message you wish to display
-    :type msg: str
-    """
-    if hasattr(self, '_debug') and self._debug:
-        line = _getframe(1).f_lineno
-        name = _getframe(1).f_code.co_name
-        print("{}: #{} - {}".format(name, line, msg))
+#def _debug(self, msg):
+#    """
+#    Display a debug message with current line number and function name
+#
+#    :param self: A reference to the object calling this routine
+#    :type self: object
+#    :param msg: The message you wish to display
+#    :type msg: str
+#    """
+#    if hasattr(self, '_debug') and self._debug:
+#        line = _getframe(1).f_lineno
+#        name = _getframe(1).f_code.co_name
+#        print("{}: #{} - {}".format(name, line, msg))
 
 
 def _anonymous(text):

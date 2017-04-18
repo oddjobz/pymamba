@@ -2,7 +2,7 @@
 
 import unittest
 import lmdb
-from pymamba import Database, Table, Index, _debug, xIndexMissing, \
+from pymamba import Database, Table, Index,  xIndexMissing, \
     xWriteFail, xTableMissing
 from subprocess import call
 
@@ -584,11 +584,6 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(res[0]['code'], 'A')
         self.assertEqual(res[-1]['code'], 'F')
 
-
-        #for doc in table.range('by_code', {'code': 'B'}, {'code': 'E'}, inclusive=False):
-        #    print(doc)
-
-
     def test_29_with_txn(self):
 
         db = Database(self._db_name)
@@ -599,16 +594,30 @@ class UnitTests(unittest.TestCase):
             with self.assertRaises(xIndexMissing):
                 next(table.find('123'))
         with db.begin():
+            idx = table.index('by_name', '{name}', duplicates=True)
+            print("Count=", idx.count())
+            idx.empty(db.transaction.txn)
+
+        self.generate_data1(db, self._tb_name)
+        with db.begin():
+            table.drop_index('by_name')
+            table.index('by_name', '{name}', duplicates=True)
             docs = list(table.find())
             doc = docs[0]
+            print("Doc>", doc)
             table.delete(doc)
             doc = docs[1]
             print("+", doc)
             doc['age'] += 1
             table.save(doc)
+            docs = list(table.find())
+            doc = docs[0]
+            self.assertEqual(doc['age'], 3001)
+            self.assertEqual(db.tables_all, ['@_demo1_by_name', '_demo1_by_name', 'demo1'])
             db.drop('demo1')
-        #table.index('by_age', '{age:03}', duplicates=True)
-        #doc = table.seek_one('by_age', {'age': 3000})
-        #self.assertEqual(doc['age'], 3000)
-        #self.assertEqual(doc['name'], 'Squizzey')
-        #print("!!!", doc)
+
+        with self.assertRaises(Exception):
+            with db.begin():
+                raise Exception('catch this')
+
+        self.assertEqual(db.tables_all, [])
