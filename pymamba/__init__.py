@@ -7,9 +7,6 @@ not feature complete and not exhaustively tested in the real world.
 """
 ##############################################################################
 # TODO Items go here ...
-# TODO: Add an explicit 'sync' method
-# TODO: add table method ensure(index_name, spec)
-# TODO: don't rely on cached index list for 'drop'
 ##############################################################################
 #
 # MIT License
@@ -42,15 +39,19 @@ not feature complete and not exhaustively tested in the real world.
 #   playing with.
 #
 ##############################################################################
-from lmdb import Cursor, Environment, Transaction
+from lmdb import Cursor, Environment, Transaction, NotFoundError
 from ujson import loads, dumps
 from sys import _getframe, maxsize
 from bson.objectid import ObjectId
 from types import GeneratorType
+from ujson_delta import diff
 
-__version__ = '0.1.35'
+__version__ = '0.1.37'
 
 def read_transaction(func):
+    """
+    Wrapper for read_only transactions to ensure a an appropriate transaction is in place 
+    """
     def wrapped_f(*args, **kwargs):
         if 'txn' in kwargs:
             return func(*args, **kwargs)
@@ -63,6 +64,9 @@ def read_transaction(func):
     return wrapped_f
 
 def write_transaction(func):
+    """
+    Wrapper for write transactions to ensure a an appropriate transaction is in place 
+    """
     def wrapped_f(*args, **kwargs):
         if 'txn' in kwargs:
             return func(*args, **kwargs)
@@ -84,7 +88,7 @@ class DBTransaction(object):
     def __init__(self, db):
         self.txns = []
         self._txn = Transaction(db.env, write=True)
-        setattr(self, 'end', db.end)
+        self._db = db
 
     def __enter__(self):
         """
@@ -105,24 +109,26 @@ class DBTransaction(object):
         :return: n/a
         """
         if txn_type is None:
+            if self._db._binlog:
+                key = str(ObjectId())
+                doc = {'txn': self.txns}
+                if not self._txn.put(key.encode(), dumps(doc).encode(), db=self._db._binlog, append=True): raise xWriteFail(key)
             self._txn.commit()
-            print('Replicate:')
-            print(self.txns)
         else:
             self._txn.abort()
 
-        self.end()
+        self._db.end()
 
-    def append(self, table, record):
+    def append(self, table, doc):
         """
         Append a new record to the transaction
 
         :param table: Table to operate on
         :type table: str       
-        :param record: The record that has been appended
-        :type record: dict
+        :param doc: The record that has been appended
+        :type doc: dict
         """
-        self.txns.append({'A': 'A', 'T': table, 'R': record})
+        self.txns.append({'cmd': 'add', 'tab': table, 'doc': doc})
 
     def delete(self, table, keys):
         """
@@ -133,7 +139,7 @@ class DBTransaction(object):
         :param keys: A list of keys to delete
         :type keys: list
         """
-        self.txns.append({'A': 'D', 'T': table, 'K': keys})
+        self.txns.append({'cmd': 'del', 'tab': table, 'keys': keys})
 
     def drop(self, table):
         """
@@ -142,7 +148,7 @@ class DBTransaction(object):
         :param table: Name of the table to drop
         :type table: str
         """
-        self.txns.append({'A': 'X', 'T': table})
+        self.txns.append({'cmd': 'drp', 'tab': table})
 
     def empty(self, table):
         """
@@ -151,7 +157,7 @@ class DBTransaction(object):
         :param table: Name of the table to empty
         :type table: str
         """
-        self.txns.append({'A': 'E', 'T': table})
+        self.txns.append({'cmd': 'emp', 'tab': table})
 
     def update(self, table, key, delta):
         """
@@ -164,7 +170,7 @@ class DBTransaction(object):
         :param delta: Delta of the changes old->new
         :type delta: dict
         """
-        self.txns.append({'A': 'U', 'T': table, 'K': key, 'Y': delta})
+        self.txns.append({'cmd': 'upd', 'tab': table, 'key': key, 'yyy': delta})
 
     def index(self, table, name, func, duplicates):
         """
@@ -179,7 +185,7 @@ class DBTransaction(object):
         :param duplicates: Whether to allow duplicates
         :type duplicates: bool
         """
-        self.txns.append({'A': 'I', 'T': table, 'N': name, 'F': func, 'D': duplicates})
+        self.txns.append({'cmd': 'idx', 'tab': table, 'idx': name, 'fun': func, 'dup': duplicates})
 
     def unindex(self, table, name):
         """
@@ -190,7 +196,7 @@ class DBTransaction(object):
         :param name: The name of the index to remove
         :type name: str
         """
-        self.txns.append({'A': 'U', 'T': table, 'N': name})
+        self.txns.append({'cmd': 'uix', 'tab': table, 'idx': name})
 
     @property
     def txn(self):
@@ -218,12 +224,16 @@ class Database(object):
         'map_async': True
     }
 
-    def __init__(self, name, conf=None):
+    def __init__(self, name, conf=None, binlog=True):
         conf = dict(self._conf, **conf.get('env', {})) if conf else self._conf
         self._tables = {}
         self._env = Environment(name, **conf)
         self._db = self._env.open_db()
         self._transaction = None
+        try:
+            self._binlog = self.env.open_db('__binlog__'.encode(), create=binlog)
+        except NotFoundError:
+            self._binlog = None
 
     def __del__(self):
         self.close()
@@ -248,9 +258,24 @@ class Database(object):
         """
         return self._transaction
 
-    #@property
-    #def txn(self):
-    #    return self._transaction.txn if self._transaction else None
+    def binlog(self, enable=True):
+        """
+        Enable or disable binary logging, disable with delete the transaction history too ...
+        
+        :param enable: Whether to enable or disable logging 
+        """
+        if enable:
+            if not self._binlog:
+                self._binlog = self.env.open_db('__binlog__'.encode())
+        else:
+            if self._binlog:
+                if self.transaction:
+                    self.transaction.txn.drop(self._binlog, True)
+                else:
+                    with self.env.begin(write=True) as txn:
+                        txn.drop(self._binlog, True)
+
+            self._binlog = None
 
     def begin(self):
         """
@@ -274,6 +299,9 @@ class Database(object):
         if self._env:
             self._env.close()
             self._env = None
+
+    def sync(self, force=False):
+        self.env.sync(force)
 
     def exists(self, name):
         """
@@ -314,7 +342,7 @@ class Database(object):
                 if cursor.first():
                     while True:
                         name = cursor.key().decode()
-                        if all or name[0] not in ['_', '@']:
+                        if all or name[0] not in ['_', '@', '~']:
                             result.append(name)
                         if not cursor.next():
                             break
@@ -331,7 +359,8 @@ class Database(object):
         :type name: str
         """
         if name in self._tables:
-            self._tables[name]._drop()
+            if name in self.tables:
+                self._tables[name]._drop()
             del self._tables[name]
         else:
             raise xTableMissing
@@ -684,6 +713,28 @@ class Table(object):
 
         return self._indexes[name]
 
+    def ensure(self, index, func, duplicates=False, force=True):
+        """
+        Ensure than an index exists and create if it's missing
+        
+        :param index: The name of the index we're checking
+        :type index: str
+        :param func: The indexing function for this index
+        :type func: str
+        :param duplicates: Whether the index should allow for duplicates
+        :type duplicates: bool
+        :param force: whether to force creation even if it already exists
+        :type force: bool
+        :return: The index we're checking for
+        :rtype: Index
+        """
+        if index in self._indexes:
+            if force:
+                self.drop_index(index)
+            else:
+                return self._indexes[index]
+        return self.index(index, func, duplicates)
+
     @write_transaction
     def reindex(self, txn):
         """
@@ -746,9 +797,12 @@ class Table(object):
         if not txn.put(key, dumps(rec).encode(), db=self._db): raise xWriteFail('main record')
         for name in self._indexes:
             self._indexes[name].save(txn, key, old, rec)
-
+        #
+        #   Delta, old .vs. record
+        #
+        detla = diff(old, record, verbose=False)
         if self._ctx.transaction:
-            self._ctx.transaction.update(self._name, key, rec)
+            self._ctx.transaction.update(self._name, key, detla)
 
     @read_transaction
     def seek(self, index, record, txn, abort=False):
@@ -1052,19 +1106,19 @@ class Index(object):
             if not txn.put(new_key, key, db=self._db): raise xReindexNoKey2
 
 
-#def _debug(self, msg):
-#    """
-#    Display a debug message with current line number and function name
-#
-#    :param self: A reference to the object calling this routine
-#    :type self: object
-#    :param msg: The message you wish to display
-#    :type msg: str
-#    """
-#    if hasattr(self, '_debug') and self._debug:
-#        line = _getframe(1).f_lineno
-#        name = _getframe(1).f_code.co_name
-#        print("{}: #{} - {}".format(name, line, msg))
+def _debug(self, msg):
+    """
+    Display a debug message with current line number and function name
+
+    :param self: A reference to the object calling this routine
+    :type self: object
+    :param msg: The message you wish to display
+    :type msg: str
+    """
+    if hasattr(self, '_debug') and self._debug:
+        line = _getframe(1).f_lineno
+        name = _getframe(1).f_code.co_name
+        print("{}: #{} - {}".format(name, line, msg))
 
 
 def _anonymous(text):

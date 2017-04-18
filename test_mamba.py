@@ -1,9 +1,7 @@
 #!/usr/bin/python3
 
 import unittest
-import lmdb
-from pymamba import Database, Table, Index,  xIndexMissing, \
-    xWriteFail, xTableMissing
+from pymamba import Database, Table, _debug, xIndexMissing, xWriteFail, xTableMissing
 from subprocess import call
 
 
@@ -50,6 +48,9 @@ class UnitTests(unittest.TestCase):
                 if '_id' in row:
                     del row['_id']
                 table.append(dict(row))
+
+    def test_00_debug(self):
+        _debug(self, "We are here!")
 
     def test_01_open_database(self):
         db = Database(self._db_name)
@@ -595,7 +596,6 @@ class UnitTests(unittest.TestCase):
                 next(table.find('123'))
         with db.begin():
             idx = table.index('by_name', '{name}', duplicates=True)
-            print("Count=", idx.count())
             idx.empty(db.transaction.txn)
 
         self.generate_data1(db, self._tb_name)
@@ -604,16 +604,24 @@ class UnitTests(unittest.TestCase):
             table.index('by_name', '{name}', duplicates=True)
             docs = list(table.find())
             doc = docs[0]
-            print("Doc>", doc)
             table.delete(doc)
             doc = docs[1]
-            print("+", doc)
             doc['age'] += 1
             table.save(doc)
             docs = list(table.find())
             doc = docs[0]
             self.assertEqual(doc['age'], 3001)
-            self.assertEqual(db.tables_all, ['@_demo1_by_name', '_demo1_by_name', 'demo1'])
+            all = db.tables_all
+            cmp = ['__binlog__','@_demo1_by_name', '_demo1_by_name', 'demo1']
+            all.sort()
+            cmp.sort()
+            self.assertEqual(all, cmp)
+            db.binlog(False)
+            all = db.tables_all
+            all.sort()
+            cmp = ['@_demo1_by_name', '_demo1_by_name', 'demo1']
+            cmp.sort()
+            self.assertEqual(all, cmp)
             db.drop('demo1')
 
         with self.assertRaises(Exception):
@@ -621,3 +629,19 @@ class UnitTests(unittest.TestCase):
                 raise Exception('catch this')
 
         self.assertEqual(db.tables_all, [])
+        db.binlog(False)
+        db.sync(True)
+
+        db = Database(self._db_name, binlog=False)
+        db.binlog()
+        db.binlog(False)
+
+    def test_30_ensure(self):
+        db = Database(self._db_name)
+        table = db.table(self._tb_name)
+        self.generate_data1(db, self._tb_name)
+        with db.begin():
+            index = table.ensure('by_name', '{name}', True, False)
+            index = table.ensure('by_name', '{name}', True, False)
+            index = table.ensure('by_name', '{name}', True, True)
+

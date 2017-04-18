@@ -1,8 +1,19 @@
 ### Version 0.2
 
 * Restructuring in advance of replication code
-* Made table.drop private
-* Moved reindex from Index to Table
+* Made a number of methods private which don't need to be exposed
+* Wrapped everything to allow for three txn options
+* Replication methid
+```
+    # each doc needs a ['_own': bool] field
+    with db.begin():
+        doc = table.seek_one(index,key, own=True)
+        modify doc
+        table.save(doc) [fail if not owner] 
+    => (release)
+    
+    .. maybe yield a class wrapper rather than dict ??
+```
 
 ### Version 0.1.35
 
