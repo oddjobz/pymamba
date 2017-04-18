@@ -30,6 +30,7 @@ setup(
     install_requires=[
         'lmdb',
         'ujson',
+        'ujson_delta',
         'pymongo'
     ]
 )
