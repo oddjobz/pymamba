@@ -27,7 +27,7 @@ class UserModel(BaseModel):
 
 if __name__ == '__main__':
 
-    database = Database('people_database', {'env': {'map_size': 1024 * 1024 * 10}})
+    database = Database('databases/people_database', {'env': {'map_size': 1024 * 1024 * 10}})
     user_model = UserModel(table=database.table('users'))
     #
     #   Really basic interface using functions built-in to the BaseModel class.

@@ -57,10 +57,7 @@ class DateType(BaseType):
         :return: date (string)
         """
         val = doc.get(self._vnam, None)
-        try:
-            return datetime.fromtimestamp(val).strftime(self._format)
-        except Exception as e:
-            raise e
+        return datetime.fromtimestamp(val).strftime(self._format)
 
     def to_internal(self, doc, value):
         """
@@ -79,13 +76,10 @@ class AgeType(BaseType):
         :param doc: the current record
         :return: age (integer)
         """
-        try:
-            now = datetime.now()
-            val = doc.get(self._vnam, now)
-            dob = datetime.fromtimestamp(val)
-            return (now - dob).days // 365
-        except Exception as e:
-            raise e
+        now = datetime.now()
+        val = doc.get(self._vnam, now)
+        dob = datetime.fromtimestamp(val)
+        return (now - dob).days // 365
 
 
 class NameType(BaseType):

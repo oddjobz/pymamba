@@ -1,5 +1,8 @@
 .build
 .idea
 people_database
+test_models
 __pycache__
 unit-db
+.cache
+.coverage

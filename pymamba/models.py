@@ -1,5 +1,6 @@
 from json import loads
 
+
 class BaseModel(object):
 
     _calculated = {}
@@ -16,7 +17,6 @@ class BaseModel(object):
 
         if 'table' in kwargs:
             self.__class__._table = kwargs['table']
-
 
     def __getattr__(self, key):
         """
@@ -144,8 +144,6 @@ class BaseModel(object):
             for doc in self.find():
                 print(format_data.format(d=doc))
         else:
-            if type(uuids) == str:
-                uuids = [uuids]
             for uuid in uuids:
                 doc = self.get(uuid.encode())
                 print(format_data.format(d=doc))
