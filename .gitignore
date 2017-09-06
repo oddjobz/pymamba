@@ -1,0 +1,5 @@
+.build
+.idea
+people_database
+__pycache__
+unit-db
