@@ -102,3 +102,33 @@ class UUIDType(BaseType):
 
     def from_internal(self, doc):
         return doc[self._vnam].decode()
+
+
+class ManyToManyLink(BaseType):
+
+    _table = None
+    _target = None
+
+    def __init__(self, table, classA, classB):
+        self._table = table
+        self._classA = classA
+        self._classB = classB
+        self._src_key = self._classA._table._name
+        self._dst_key = self._classB._table._name
+        self._results = None
+        self._original = None
+
+    def from_internal(self, doc):
+        if not self._results:
+            self._results = []
+            key = {self._src_key: doc['_id'].decode()}
+            for link in self._table.seek(self._src_key, key):
+                dst_key = link[self._dst_key].encode()
+                target = self._classB._table.get(dst_key)
+                self._results.append(self._classB.__class__(target))
+            self._original = self._results.copy()
+        return self._results
+
+    def to_internal(self, doc, value):
+        #doc[self._vnam] = value
+        print("Changing!!!!=>", value)

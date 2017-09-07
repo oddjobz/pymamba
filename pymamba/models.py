@@ -1,12 +1,8 @@
 from json import loads
+from .types import ManyToManyLink
 
 
 class BaseModel(object):
-
-    _calculated = {}
-    _table = None
-    _display = {}
-    _doc = {}
 
     def __init__(self, *args, **kwargs):
         """
@@ -16,7 +12,7 @@ class BaseModel(object):
             self._doc = args[0]
 
         if 'table' in kwargs:
-            self.__class__._table = kwargs['table']
+            self._table = kwargs['table']
 
     def __getattr__(self, key):
         """
@@ -37,7 +33,7 @@ class BaseModel(object):
         :param value: the new value for the attribute
         """
 
-        if key in ['_doc', '_table']:
+        if key in ['_doc', '_table', '_links']:
             super().__setattr__(key, value)
         else:
             if key not in self._calculated:
@@ -56,9 +52,16 @@ class BaseModel(object):
         """
         Validate the current record against any available validators
         """
-        for field in list(self._doc):
-            if field in self._calculated:
-                self.__setattr__(field, self._doc[field])
+        for link in self._links:
+            print("Checking:", link)
+            if not link._original or not link._results:
+                print("Ignoring no change")
+                continue
+            print("Deleted: ", set(link._original) - set(link._results))
+            print("Added: ", set(link._results) - set(link._original))
+            for field in list(self._doc):
+                if field in self._calculated:
+                    self.__setattr__(field, self._doc[field])
         return self
 
     def format(self):
@@ -89,9 +92,9 @@ class BaseModel(object):
         """
         Append the current record to the Database
         """
-        user = self.__class__(loads(json))
-        user.validate()
-        user._table.append(user._doc)
+        model = self.__class__(loads(json))
+        model.validate()
+        self._table.append(model._doc)
 
     def modify(self, uuid, keyval):
         """
@@ -99,17 +102,17 @@ class BaseModel(object):
         :param uuid: key for record
         :param keyval: key=val string
         """
-        user = self.get(uuid.encode())
-        setattr(user, *keyval.split('='))
-        user.save()
+        instance = self.get(uuid.encode())
+        setattr(instance, *keyval.split('='))
+        instance.save()
 
     def find(self):
         """
         Facilitate a sequential search of the database
         :return: the next record (as a Model)
         """
-        for doc in self.__class__._table.find():
-            yield self.__class__(doc)
+        for doc in self._table.find():
+            yield self.__class__(doc, table=self._table)
 
     def list(self, *uuids):
         """
@@ -118,6 +121,7 @@ class BaseModel(object):
         :return:
         """
         fields = []
+        functions = []
         format_line = '+'
         format_head = '| '
         format_data = '| '
@@ -126,6 +130,9 @@ class BaseModel(object):
             name = field.get('name', None)
             width = field.get('width', None)
             precision = field.get('precision', None)
+            func = field.get('function', None)
+            if func:
+                functions.append(func)
             fields.append(name)
             format_line += '{}+'
             format_head += '{{:{}.{}}} | '.format(width, width)
@@ -142,9 +149,42 @@ class BaseModel(object):
         print(line)
         if not uuids:
             for doc in self.find():
-                print(format_data.format(d=doc))
+                doc.addresses.append(self.__class__({'line1': 'New Address', 'postcode': 'New Postcode'}))
+                doc.save()
+
+            for doc in self.find():
+                for func in functions:
+                    fn = getattr(doc, func, None)
+                    fn() if fn else None
+                try:
+                    print(format_data.format(d=doc))
+                except TypeError as e:
+                    print("Format>", format_data)
+                    print("Doc>", doc)
+                    print(e)
         else:
             for uuid in uuids:
                 doc = self.get(uuid.encode())
                 print(format_data.format(d=doc))
         print(line)
+
+
+class ManyToMany(object):
+
+    _table = None
+
+    def __init__(self, database, classA, classB):
+        table = 'rel_{}_{}'.format(classA._table._name, classB._table._name)
+        self._table = database.table(table)
+        self._table.index(classA._table._name, '{{{}}}'.format(classA._table._name), duplicates=True)
+        self._table.index(classB._table._name, '{{{}}}'.format(classB._table._name), duplicates=True)
+        linkA = ManyToManyLink(self._table, classA, classB)
+        linkB = ManyToManyLink(self._table, classB, classA)
+        classA._calculated[classB._table._name] = linkA
+        classB._calculated[classA._table._name] = linkB
+        if not hasattr(classA.__class__, "_links"):
+            classA.__class__._links = []
+        if not hasattr(classB.__class__, "_links"):
+            classB.__class__._links = []
+        classA._links.append(linkA)
+        classB._links.append(linkB)
