@@ -123,16 +123,12 @@ class Database(object):
             for doc in src.find():
                 dst.append(doc, txn)
 
-        try:
-            with self._env.begin(write=True) as txn:
-                src.empty(txn)
-                for doc in dst.find():
-                    src.append(doc, txn)
-                dst.drop(True, txn)
-                del self._tables[dst_name]
-        except Exception as error:
-            txn.abort()
-            raise error
+        with self._env.begin(write=True) as txn:
+            src.empty(txn)
+            for doc in dst.find():
+                src.append(doc, txn)
+            dst.drop(True, txn)
+            del self._tables[dst_name]
 
     def table(self, name):
         """

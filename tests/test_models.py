@@ -73,7 +73,7 @@ class UnitTests(unittest.TestCase):
     def test_check_modify(self):
         self.generate_data_1()
         for doc in self._model.find():
-            self._model.modify(doc.uuid, 'forename=ME')
+            doc.modify(doc.uuid, 'forename=ME')
             get = self._model.get(doc._id)
             self.assertEqual(get.forename, "ME")
 
@@ -83,6 +83,7 @@ class UnitTests(unittest.TestCase):
         out, err = self.capfd.readouterr()
         with open('tests/test_models_table1.txt') as io:
             compare = io.read()
+
         self.assertEqual(compare, out)
         for doc in self._model.find():
             self._model.list(str(doc._id.decode()))
@@ -90,6 +91,7 @@ class UnitTests(unittest.TestCase):
         out, err = self.capfd.readouterr()
         with open('tests/test_models_table2.txt') as io:
             compare = io.read()
+
         self.assertEqual(compare, out)
 
     def test_data_type_name(self):

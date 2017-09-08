@@ -16,9 +16,6 @@ class BaseModel(object):
         if 'table' in kwargs:
             self._table = kwargs['table']
 
-    def __delitem__(self, key):
-        print("***** DELETE: {} *******".format(key))
-
     def __getattr__(self, key):
         """
         Get the value of a real or calculated field
@@ -95,9 +92,8 @@ class BaseModel(object):
         :param uuid: key for record
         :param keyval: key=val string
         """
-        instance = self.get(uuid.encode())
-        setattr(instance, *keyval.split('='))
-        instance.save()
+        setattr(self, *keyval.split('='))
+        self.save()
 
     def find(self):
         """
@@ -124,8 +120,7 @@ class BaseModel(object):
             width = field.get('width', None)
             precision = field.get('precision', None)
             func = field.get('function', None)
-            if func:
-                functions.append(func)
+            functions.append(func) if func else None
             fields.append(name)
             format_line += '{}+'
             format_head += '{{:{}.{}}} | '.format(width, width)
@@ -145,12 +140,7 @@ class BaseModel(object):
                 for func in functions:
                     fn = getattr(doc, func, None)
                     fn() if fn else None
-                try:
-                    print(format_data.format(d=doc))
-                except TypeError as e:
-                    print("Format>", format_data)
-                    print("Doc>", doc)
-                    print(e)
+                print(format_data.format(d=doc))
         else:
             for uuid in uuids:
                 doc = self.get(uuid.encode())
@@ -185,6 +175,7 @@ class BaseModel(object):
         :param doc:
         :return:
         """
+        print("!!!", doc)
         del doc._doc['_dirty']
         doc.save()
         linkage = {doc._table._name: doc._id.decode(), self._table._name: self._id.decode()}
@@ -199,8 +190,7 @@ class BaseModel(object):
         :return:
         """
         item = link._table.seek_one(doc._table._name, {doc._table._name:doc._id.decode()})
-        if not item:
-            raise xForeignKeyViolation('link table item is missing')
+        if not item: raise xForeignKeyViolation('link table item is missing')
         link._table.delete(item['_id'])
 
     def save(self):
@@ -221,6 +211,7 @@ class BaseModel(object):
                         self.upd_dependent(link, doc)
                 for doc in set(link._original)-set(link._results):
                     self.del_dependent(link, doc)
+            link._results = None
 
 
 class ManyToMany(object):
@@ -244,6 +235,6 @@ class ManyToMany(object):
         classB._links.append(linkB)
 
 
-class xForeignKeyViolation(Exception):
+class xForeignKeyViolation(BaseException):
     """Foreign key entry is missing"""
 

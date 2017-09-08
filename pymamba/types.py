@@ -128,6 +128,3 @@ class ManyToManyLink(BaseType):
             self._original = self._results[:]
         return self._results
 
-    def to_internal(self, doc, value):
-        #doc[self._vnam] = value
-        print("Changing!!!!=>", value)
