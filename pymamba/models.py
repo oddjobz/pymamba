@@ -4,6 +4,8 @@ from .types import ManyToManyLink
 
 class BaseModel(object):
 
+    _doc = {}
+
     def __init__(self, *args, **kwargs):
         """
         Create a model object based on a supplied dict object
@@ -13,6 +15,9 @@ class BaseModel(object):
 
         if 'table' in kwargs:
             self._table = kwargs['table']
+
+    def __delitem__(self, key):
+        print("***** DELETE: {} *******".format(key))
 
     def __getattr__(self, key):
         """
@@ -36,6 +41,8 @@ class BaseModel(object):
         if key in ['_doc', '_table', '_links']:
             super().__setattr__(key, value)
         else:
+            if '_dirty' not in self._doc:
+                self._doc['_dirty'] = True
             if key not in self._calculated:
                 self._doc[key] = value
             else:
@@ -52,16 +59,9 @@ class BaseModel(object):
         """
         Validate the current record against any available validators
         """
-        for link in self._links:
-            print("Checking:", link)
-            if not link._original or not link._results:
-                print("Ignoring no change")
-                continue
-            print("Deleted: ", set(link._original) - set(link._results))
-            print("Added: ", set(link._results) - set(link._original))
-            for field in list(self._doc):
-                if field in self._calculated:
-                    self.__setattr__(field, self._doc[field])
+        for field in list(self._doc):
+            if field in self._calculated:
+                self.__setattr__(field, self._doc[field])
         return self
 
     def format(self):
@@ -72,13 +72,6 @@ class BaseModel(object):
             if field in self._calculated:
                 self._doc[field] = self.__getattr__(field)
         return self
-
-    def save(self):
-        """
-        Save this record in the database
-        """
-        self.validate()
-        self._table.save(self._doc)
 
     def get(self, key):
         """
@@ -149,10 +142,6 @@ class BaseModel(object):
         print(line)
         if not uuids:
             for doc in self.find():
-                doc.addresses.append(self.__class__({'line1': 'New Address', 'postcode': 'New Postcode'}))
-                doc.save()
-
-            for doc in self.find():
                 for func in functions:
                     fn = getattr(doc, func, None)
                     fn() if fn else None
@@ -167,6 +156,71 @@ class BaseModel(object):
                 doc = self.get(uuid.encode())
                 print(format_data.format(d=doc))
         print(line)
+
+
+    def add_link(self, link, doc):
+        """
+        Add an entry to the link table
+        :param link: link definition
+        :param doc: the document containing the relevant details
+        :return:
+        """
+        linkage = {doc._table._name: doc._id.decode(), self._table._name: self._id.decode()}
+        link._table.append(linkage)
+
+    def add_dependent(self, link, doc):
+        """
+        Add a new dependent item
+        :param link:
+        :param doc:
+        :return:
+        """
+        doc._table.append(doc._doc)
+        self.add_link(link, doc)
+
+    def upd_dependent(self, link, doc):
+        """
+        Update a dependent record
+        :param link:
+        :param doc:
+        :return:
+        """
+        del doc._doc['_dirty']
+        doc.save()
+        linkage = {doc._table._name: doc._id.decode(), self._table._name: self._id.decode()}
+        item = link._table.seek_one(doc._table._name, linkage)
+        self.add_link(link, doc) if not item else None
+
+    def del_dependent(self, link, doc):
+        """
+        Delete a link to a record in a dependent table
+        :param link: the link table
+        :param doc: the document to unlink
+        :return:
+        """
+        item = link._table.seek_one(doc._table._name, {doc._table._name:doc._id.decode()})
+        if not item:
+            raise xForeignKeyViolation('link table item is missing')
+        link._table.delete(item['_id'])
+
+    def save(self):
+        """
+        Save this record in the database
+        """
+        self.validate()
+        self._table.save(self._doc)
+        #
+        #   Process any changes to dependencies
+        #
+        for link in self._links:
+            if link._results:
+                for doc in link._results:
+                    if not doc._id:
+                        self.add_dependent(link, doc)
+                    elif doc._dirty:
+                        self.upd_dependent(link, doc)
+                for doc in set(link._original)-set(link._results):
+                    self.del_dependent(link, doc)
 
 
 class ManyToMany(object):
@@ -188,3 +242,8 @@ class ManyToMany(object):
             classB.__class__._links = []
         classA._links.append(linkA)
         classB._links.append(linkB)
+
+
+class xForeignKeyViolation(Exception):
+    """Foreign key entry is missing"""
+

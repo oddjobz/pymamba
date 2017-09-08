@@ -50,6 +50,26 @@ class AddressModel(BaseModel):
     ]
 
 
+def modify():
+
+    for doc in user_model.find():
+        #doc.addresses.append(AddressModel({'line1': 'New Address', 'line2': '456', 'postcode': 'New Postcode'}, table=address_model._table))
+        #print(doc.addresses)
+        #doc.save()
+        doc.addresses[0].postcode = 'CF38 1AD'
+        doc.save()
+        break
+        for address in doc.addresses:
+            #if address.postcode == 'CF38 1AA':
+            print("id_={d.uuid} pc={d.postcode}".format(d=address))
+            doc.addresses.remove(address)
+            del doc.addresses[0]
+                #address.line1 = 'Gareth woz ere'
+            doc.save()
+            break
+        break
+
+
 if __name__ == '__main__':
 
     database = Database('databases/people_database', {'env': {'map_size': 1024 * 1024 * 10}})
@@ -67,13 +87,14 @@ if __name__ == '__main__':
         'mod_address': address_model.modify,
         'lst_address': address_model.list
     }
-    try:
-        commands[argv[1]](*argv[2:])
-        exit()
-    except IndexError:
-        print('Insufficient parameters')
-    except KeyError:
-        print('No such command "{}"'.format(argv[1]))
-    except Exception as e:
-        raise e
-    print('Usage: {} [{}]'.format(argv[0], '|'.join(list(commands.keys()))))
+    #try:
+    commands[argv[1]](*argv[2:])
+    modify()
+    exit()
+    #except IndexError:
+    #    print('Insufficient parameters')
+    #except KeyError:
+    #    print('No such command "{}"'.format(argv[1]))
+    #except Exception as e:
+    #    raise e
+    #print('Usage: {} [{}]'.format(argv[0], '|'.join(list(commands.keys()))))
