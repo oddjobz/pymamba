@@ -4,17 +4,18 @@ from .types import ManyToManyLink
 
 class BaseModel(object):
 
-    _doc = {}
+    _calculated = {}
+    _display = {}
 
     def __init__(self, *args, **kwargs):
         """
         Create a model object based on a supplied dict object
         """
-        if len(args):
-            self._doc = args[0]
-
+        self._doc = args[0] if len(args) else {}
         if 'table' in kwargs:
             self._table = kwargs['table']
+
+        self._dirty = False
 
     def __getattr__(self, key):
         """
@@ -34,16 +35,17 @@ class BaseModel(object):
         :param key: the attribute name
         :param value: the new value for the attribute
         """
-
-        if key in ['_doc', '_table', '_links']:
+        if key in ['_table', '_links', '_dirty']:
             super().__setattr__(key, value)
+        elif key == '_doc':
+            super().__setattr__(key, value)
+            self._dirty = True
+        elif key not in self._calculated:
+            self._doc[key] = value
+            self._dirty = True
         else:
-            if '_dirty' not in self._doc:
-                self._doc['_dirty'] = True
-            if key not in self._calculated:
-                self._doc[key] = value
-            else:
-                self._calculated[key].to_internal(self._doc, value)
+            self._calculated[key].to_internal(self._doc, value)
+            self._dirty = True
 
     def __repr__(self):
         """
@@ -77,14 +79,6 @@ class BaseModel(object):
         :return: record (as a Model)
         """
         return self.__class__(self._table.get(key)).format()
-
-    def append(self, json):
-        """
-        Append the current record to the Database
-        """
-        model = self.__class__(loads(json))
-        model.validate()
-        self._table.append(model._doc)
 
     def modify(self, uuid, keyval):
         """
@@ -147,42 +141,47 @@ class BaseModel(object):
                 print(format_data.format(d=doc))
         print(line)
 
-
-    def add_link(self, link, doc):
+    def add_link(self, link, doc, context):
         """
         Add an entry to the link table
         :param link: link definition
         :param doc: the document containing the relevant details
+        :param context: the document to link to
         :return:
         """
-        linkage = {doc._table._name: doc._id.decode(), self._table._name: self._id.decode()}
+        lhs = link._classB._table._name
+        rhs = link._classA._table._name
+        linkage = {lhs: doc._id.decode(), rhs: context._id.decode()}
         link._table.append(linkage)
 
-    def add_dependent(self, link, doc):
+    def add_dependent(self, link, doc, context):
         """
         Add a new dependent item
         :param link:
         :param doc:
         :return:
         """
-        doc._table.append(doc._doc)
-        self.add_link(link, doc)
+        link._classB._table.append(doc._doc)
+        self.add_link(link, doc, context)
 
-    def upd_dependent(self, link, doc):
+    def upd_dependent(self, link, doc, context):
         """
         Update a dependent record
         :param link:
         :param doc:
         :return:
         """
-        print("!!!", doc)
-        del doc._doc['_dirty']
-        doc.save()
-        linkage = {doc._table._name: doc._id.decode(), self._table._name: self._id.decode()}
-        item = link._table.seek_one(doc._table._name, linkage)
-        self.add_link(link, doc) if not item else None
+        lhs = link._classB._table._name
+        rhs = link._classA._table._name
+        if doc._dirty:
+            doc.validate()
+            link._classB._table.save(doc._doc)
+            doc._dirty = False
+        linkage = {lhs: doc._id.decode(), rhs: context._id.decode()}
+        item = link._table.seek_one(lhs, linkage)
+        self.add_link(link, doc, context) if not item else None
 
-    def del_dependent(self, link, doc):
+    def del_dependent(self, link, doc, context):
         """
         Delete a link to a record in a dependent table
         :param link: the link table
@@ -193,24 +192,45 @@ class BaseModel(object):
         if not item: raise xForeignKeyViolation('link table item is missing')
         link._table.delete(item['_id'])
 
+    def add(self, model):
+        """
+        Append the current record to the Database
+        """
+        if type(model) is str:
+            model = loads(model)
+        if type(model) is dict:
+            model = self.__class__(model)
+        model.validate()
+        self._table.append(model._doc)
+        model._dirty = False
+        self.update_links(model)
+
     def save(self):
         """
         Save this record in the database
         """
-        self.validate()
-        self._table.save(self._doc)
+        if self._dirty:
+            self.validate()
+            self._table.save(self._doc)
+            self._dirty = False
+        self.update_links(self)
+
+    def update_links(self, context):
         #
         #   Process any changes to dependencies
         #
-        for link in self._links:
+        for link in context._links:
             if link._results:
-                for doc in link._results:
+                for i, doc in enumerate(link._results):
+                    if type(doc) == dict:
+                        doc = link._classB.__class__(doc, table=link._classB._table)
+                        link._results[i] = doc
                     if not doc._id:
-                        self.add_dependent(link, doc)
+                        self.add_dependent(link, doc, context)
                     elif doc._dirty:
-                        self.upd_dependent(link, doc)
+                        self.upd_dependent(link, doc, context)
                 for doc in set(link._original)-set(link._results):
-                    self.del_dependent(link, doc)
+                    self.del_dependent(link, doc, context)
             link._results = None
 
 

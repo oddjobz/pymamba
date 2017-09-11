@@ -39,13 +39,13 @@ class UnitTests(unittest.TestCase):
         pass
 
     def generate_data_1(self):
-        self._model.append('{"forename":"tom", "surname": "smith", "dob_ddmmyyyy": "01/01/1971", "uid": 1}')
-        self._model.append('{"forename":"dick", "surname": "smith", "dob_ddmmyyyy": "01/01/1972", "uid": 2}')
-        self._model.append('{"forename":"harry", "surname": "smith", "dob_ddmmyyyy": "01/01/1973", "uid": 3}')
-        self._model.append('{"forename":"sally", "surname": "jones", "dob_ddmmyyyy": "01/01/1969", "uid": 4}')
-        self._model.append('{"forename":"mary", "surname": "jones", "dob_ddmmyyyy": "01/01/1968", "uid": 5}')
-        self._model.append('{"forename":"sophie", "surname": "jones", "dob_ddmmyyyy": "01/01/1967", "uid": 6}')
-        self._model.append('{"forename":"joker", "surname": "wildcard", "dob_ddmmyyyy": "01/01/1966", "uid": 7}')
+        self._model.add('{"forename":"tom", "surname": "smith", "dob_ddmmyyyy": "01/01/1971", "uid": 1}')
+        self._model.add('{"forename":"dick", "surname": "smith", "dob_ddmmyyyy": "01/01/1972", "uid": 2}')
+        self._model.add('{"forename":"harry", "surname": "smith", "dob_ddmmyyyy": "01/01/1973", "uid": 3}')
+        self._model.add('{"forename":"sally", "surname": "jones", "dob_ddmmyyyy": "01/01/1969", "uid": 4}')
+        self._model.add('{"forename":"mary", "surname": "jones", "dob_ddmmyyyy": "01/01/1968", "uid": 5}')
+        self._model.add('{"forename":"sophie", "surname": "jones", "dob_ddmmyyyy": "01/01/1967", "uid": 6}')
+        self._model.add('{"forename":"joker", "surname": "wildcard", "dob_ddmmyyyy": "01/01/1966", "uid": 7}')
 
     @pytest.fixture(autouse=True)
     def capfd(self, capfd):

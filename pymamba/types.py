@@ -1,5 +1,5 @@
 from datetime import datetime
-from copy import  deepcopy
+
 
 class BaseType(object):
     """
@@ -116,15 +116,17 @@ class ManyToManyLink(BaseType):
         self._src_key = self._classA._table._name
         self._dst_key = self._classB._table._name
         self._results = None
+        self._original = []
+        super().__init__(self._dst_key)
 
     def from_internal(self, doc):
         if not self._results:
             self._results = []
-            key = {self._src_key: doc['_id'].decode()}
-            for link in self._table.seek(self._src_key, key):
-                dst_key = link[self._dst_key].encode()
-                target = self._classB._table.get(dst_key)
-                self._results.append(self._classB.__class__(target, table=self._classB._table))
-            self._original = self._results[:]
+            if '_id' in doc:
+                key = {self._src_key: doc['_id'].decode()}
+                for link in self._table.seek(self._src_key, key):
+                    dst_key = link[self._dst_key].encode()
+                    target = self._classB._table.get(dst_key)
+                    self._results.append(self._classB.__class__(target, table=self._classB._table))
+                self._original = self._results[:]
         return self._results
-

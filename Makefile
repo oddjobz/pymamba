@@ -1,4 +1,5 @@
 VERSION=`python3 -c "import pymamba; print(pymamba.__version__)"`
+export PYTHONPATH=.
 
 all:
 	@echo "Current version is: $(VERSION)"
