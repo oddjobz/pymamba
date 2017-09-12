@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from mamba import Database, _debug
+from mamba import Database
 #
 print(">> Define some arbitrary data")
 data = [

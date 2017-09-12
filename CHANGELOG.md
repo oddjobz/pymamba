@@ -1,3 +1,27 @@
+### Version 0.2
+
+* Restructuring in advance of replication code
+* Made a number of methods private which don't need to be exposed
+* Wrapped everything to allow for three txn options
+* Replication methid
+```
+    # each doc needs a ['_own': bool] field
+    with db.begin():
+        doc = table.seek_one(index,key, own=True)
+        modify doc
+        table.save(doc) [fail if not owner] 
+    => (release)
+    
+    .. maybe yield a class wrapper rather than dict ??
+```
+
+### Version 0.1.35
+
+* Fixed bug in 'seek' where the index key rather than the primary key was returned in the record body
+* Clean up exception handling on append
+* Fix append to allow the use of user-generated _id's
+* Facilitate environment-wide txn
+
 ### Version 0.1.32
 
 * Updated range code to include None as a possible upper and/or lower limit
