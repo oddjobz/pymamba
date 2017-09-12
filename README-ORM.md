@@ -7,7 +7,7 @@ tables, as you might with a traditional SQL database, maintaining linkage tables
 a bit fiddly, and it you're used to something like SQLAlchemy, the standard interface may
 seem a little *raw*.
 
-To this end there we have a built-in mechanism for overlaying some structure onto our raw
+To this end we have a built-in mechanism for overlaying some structure onto our raw
 tables to give things a bit of an *Alchemy* feel. If you're not used to ORM's then this 
 might look a bit like *magic*, but for *SQLAlchemy* users, you should feel right at home
 and hopefully wondering why *SQLAlchemy* isn't this easy ... ;-)
