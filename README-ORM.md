@@ -73,7 +73,7 @@ will dynamically change whenever the dob field is updated. Also, the *list* func
 driven (by default) by the attributes listed in *_display*.
 
 As it stands the date of birth isn't terribly readable, so we could add another field to
-the mix to ger around this, in calculated add;
+the mix to get around this, in calculated add;
 ```python
     'birthday': DateType('dob')
 ```
@@ -207,7 +207,6 @@ zero reference count will be an option when the referential integrity code is ad
 ```python
 >>> del user.addresses[0]
 >>> user.save()
->>> address_model.list()
 >>> user = list(user_model.find())[0]
 >>> user.addresses
 [{'address': 'address2', 'postcode': 'A new postcode', '_id': b'59b6860b1839fc4ee8c00599'}]
