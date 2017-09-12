@@ -1,5 +1,10 @@
 from setuptools import setup
-__version__ = '0.2.0'
+from os import path
+__version__ = '0.2.1'
+
+here = path.abspath(path.dirname(__file__))
+with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
+	long_description = f.read()
 
 setup(
     name='pymamba',
@@ -10,6 +15,7 @@ setup(
     author='Gareth Bult',
     author_email='oddjobz@linux.co.uk',
     description='Database library for Python based on LMDB storage engine',
+    long_description=long_description,
     classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha

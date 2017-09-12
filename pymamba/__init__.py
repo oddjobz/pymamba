@@ -46,7 +46,7 @@ from bson.objectid import ObjectId
 from types import GeneratorType
 from ujson_delta import diff
 
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 def read_transaction(func):
     """
