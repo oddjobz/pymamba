@@ -43,7 +43,6 @@ from lmdb import Cursor, Environment, Transaction, NotFoundError
 from ujson import loads, dumps
 from sys import _getframe, maxsize
 from bson.objectid import ObjectId
-from types import GeneratorType
 from ujson_delta import diff
 
 __version__ = '0.2.1'
