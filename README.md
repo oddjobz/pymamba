@@ -24,7 +24,7 @@ Anyway, without wanting to bore you, PyMamba should be noticeably faster than Mo
 and considerably ligther in terms of resource usage. (*so by implication far easier 
 to deploy and maintain*)
 
-#### PyMamba ORM (New!) :new:
+#### PyMamba ORM (New!) :heavy_plus_sign:
 
 There is now a native ORM style interface now available. It's very new and there are
 some features that haven't yet been implemented, so be gentle with it. There's some
