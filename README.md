@@ -32,8 +32,10 @@ some features that haven't yet been implemented, so be gentle with it. There's s
 initial documentation here;
 * [README-ORM.md](https://github.com/oddjobz/pymamba/blob/models/README-ORM.md)
 
+<!--
 <span class="octicon octicon-microscope"></span>
 <span class="octicon octicon-flame"></span>
+-->
 
 ###### Useful links to other documentation:
 * [Sphinx API documentation](https://pymamba.linux.co.uk)
