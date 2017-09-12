@@ -382,11 +382,17 @@ class Database(object):
         for doc in src.find():
             dst.append(doc, txn=txn)
 
-        src.empty(txn=txn)
-        for doc in dst.find(txn=txn):
-            src.append(doc, txn=txn)
-        dst._drop(txn=txn)
-        del self._tables[dst_name]
+        #src.empty(txn=txn)
+        #for doc in dst.find(txn=txn):
+        #    src.append(doc, txn=txn)
+        #dst._drop(txn=txn)
+        #del self._tables[dst_name]
+        with self._env.begin(write=True) as txn:
+            src.empty(txn)
+            for doc in dst.find():
+                src.append(doc, txn)
+            dst.drop(True, txn)
+            del self._tables[dst_name]
 
     def table(self, name):
         """
@@ -1104,6 +1110,16 @@ class Index(object):
         if old_key != new_key:
             if not txn.delete(old_key, key, db=self._db): raise xReindexNoKey1
             if not txn.put(new_key, key, db=self._db): raise xReindexNoKey2
+
+    @property
+    def name(self):
+        """
+        PROPERTY - Recover the name of this table
+
+        :getter: Table Name
+        :type: str
+        """
+        return self._name
 
 
 def _debug(self, msg):

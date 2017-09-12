@@ -7,7 +7,7 @@ from subprocess import call
 
 class UnitTests(unittest.TestCase):
 
-    _db_name = 'unit-db'
+    _db_name = 'databases/unit-db'
     _tb_name = 'demo1'
     _debug = True
     _data = [

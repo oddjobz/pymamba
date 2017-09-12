@@ -1,4 +1,0 @@
-lmdb
-ujson
-ujson_delta
-pymongo

@@ -1,4 +1,3 @@
-#from distutils.core import setup
 from setuptools import setup
 __version__ = '0.1.37'
 
@@ -32,5 +31,6 @@ setup(
         'ujson',
         'ujson_delta',
         'pymongo'
+        'uuid'
     ]
 )

@@ -1,1 +1,5 @@
-pymamba/requirements.txt
+lmdb
+ujson
+pymongo
+uuid
+ujson_delta
