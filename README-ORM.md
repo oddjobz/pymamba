@@ -38,17 +38,18 @@ classes to link the (wrapped) tables together. Here's a very simple example;
 
 ```python
 from pymamba import Database
-from pymamba.models import BaseModel
-from pymamba.types import AgeType
+from pymamba.models import ManyToMany, Table
+from pymamba.types import AgeType, DateType
 
-class UserModel(BaseModel):
+class UserModel(Table):
     _calculated = {
-        'age': AgeType('dob')
+        'age': AgeType('dob'),
+        'birthday': DateType('dob')
     }
     _display = [
         {'name': 'forename', 'width': 20},
         {'name': 'surname', 'width': 20},
-        {'name': 'dob', 'width': 15},
+        {'name': 'birthday', 'width': 15},
         {'name': 'age', 'width': 3}
     ]
     
@@ -59,7 +60,7 @@ If you save this to a file (demo.py) you should then be able to do the following
 ```python
 >>> from demo import user_model
 >>> import datetime
->>> user_model.append({'forename':'fred','surname':'bloggs','dob':datetime.date(1970,12,1)})
+>>> user_model.add({'forename':'fred','surname':'bloggs','dob':datetime.date(1970,12,1)})
 >>> user_model.list()
 +----------------------+----------------------+-----------------+-----+
 | forename             | surname              | dob             | age | 
@@ -126,7 +127,7 @@ having an address table, then working on the premise that users can have multipl
 addresses, and that a number of users can live at each address.
 
 ```python
-class AddressModel(BaseModel):
+class AddressModel(Table):
 
     _display = [
         {'name': 'address', 'width': 30},
@@ -143,10 +144,10 @@ So, starting up as before we can do this;
 ```python
 from demo import user_model, address_model, UserModel
 import datetime
->>> user = UserModel({'forename':'john','surname':'smith','dob':datetime.date(1971,12,1)})
+>>> user = user_model.add({'forename':'john','surname':'smith','dob':datetime.date(1971,12,1)}) 
 >>> user.addresses.append({'address': 'address1', 'postcode': 'postcode1'})
 >>> user.addresses.append({'address': 'address2', 'postcode': 'postcode2'})
->>> user_model.append(user)
+>>> user.save()
 >>> user_model.list()
 +----------------------+----------------------+-----------------+-----+
 | forename             | surname              | birthday        | age | 
@@ -171,11 +172,11 @@ also be used to append, update and delete entries in the address table. On furth
 >>> user.addresses
 [{'address': 'address1', 'postcode': 'postcode1', '_id': b'59b6860b1839fc4ee8c00597'}, {'address': 'address2', 'postcode': 'postcode2', '_id': b'59b6860b1839fc4ee8c00599'}]
 >>> type(user.addresses[0])
-<class 'demo.AddressModel'>
+<class 'pymamba.models.BaseModel'>
 ```
 Again, virtual and calculated fields are only evaluated when reading through the users table, the cost of
 reading associated tables is only incurred if the linked attributes (addresses in this case) are accessed.
-Note that the *addresses* field is a list, but of type *AddressModel*, rather than of a raw *dict*.
+Note that the *addresses* field is a list, but of type *BaseModel*, rather than of a raw *dict*.
 
 ##### Updating linkes tables
 
@@ -213,5 +214,15 @@ zero reference count will be an option when the referential integrity code is ad
 ```
 If we wanted to re-instate the relationship in this instance we could do;
 ```python
-
+>>> address = list(address_model.find())[0]
+>>> address
+{'_id': b'59b800e41839fc41593c9894', 'address': 'address1', 'postcode': 'postcode1'}
+>>> user.addresses.append(address)
+>>> user.save()
+>>> user = list(user_model.find())[0]
+>>> user.addresses
+[{'_id': b'59b800e41839fc41593c9896', 'address': 'address2', 'postcode': 'A new postcode'}, {'_id': b'59b800e41839fc41593c9894', 'address': 'address1', 'postcode': 'postcode1'}]
 ```
+The funny looking "user = list(...)" function is only being used to force a re-read on the database following
+an update. The user variable will still be instantiated and in theory a re-read should make no difference to
+it's value, but for testing, it's always good to be sure it's actually *storing* what you think it is.

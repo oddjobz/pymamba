@@ -7,6 +7,11 @@ all:
 test:
 	PYTHONPATH=. pytest --cov=pymamba --cov-report=term-missing 
 
+demo:
+	@echo "** Running Demo **"
+	@rm -rf my_db
+	@PYTHONPATH=. python3 ./examples/demo1.py
+
 clean:
 	@rm -rfv unit-db
 	@rm -rfv examples/perfDB

@@ -178,12 +178,14 @@ class Table(object):
         """
         Append the current record to the Database
         :param doc: is the document to add, it can be JSON, dict or BaseModel
+        :return: BaseModel(the new record)
         """
         doc = loads(doc) if type(doc) is str else doc
         doc = BaseModel(doc, instance=self) if type(doc) is dict else doc
         doc.validate()
         self._table.append(doc.doc())
         self.update_links(doc)
+        return doc
 
     def update_links(self, context):
         """
