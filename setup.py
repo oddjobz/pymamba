@@ -36,9 +36,9 @@ setup(
         'lmdb',
         'ujson',
         'ujson_delta',
-        'bson',
         'uuid',
         'pytz',
-        'six'
+        'six',
+        'pymongo'
     ]
 )
