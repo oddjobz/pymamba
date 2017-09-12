@@ -1,5 +1,5 @@
 from setuptools import setup
-__version__ = '0.1.37'
+__version__ = '0.2.0'
 
 setup(
     name='pymamba',
@@ -25,7 +25,7 @@ setup(
         # that you indicate whether you support Python 2, Python 3 or both.
         'Programming Language :: Python :: 3.5',
     ],
-    keywords=['pymamba','database','LMDB'],
+    keywords=['pymamba','database','LMDB','python','ORM'],
     install_requires=[
         'lmdb',
         'ujson',
