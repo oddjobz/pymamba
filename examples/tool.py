@@ -1,6 +1,9 @@
+"""
+This is a debugging tool, doesn't do much for now ..
+"""
+
 from lmdb import Cursor, Environment
 from sys import argv
-from json import loads
 
 env = Environment(argv[1], **{
     'map_size': 1024 * 1024 * 10,

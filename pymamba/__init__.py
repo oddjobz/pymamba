@@ -386,12 +386,6 @@ class Database(object):
             src.append(doc, txn=txn)
         dst._drop(txn=txn)
         del self._tables[dst_name]
-        #with self._env.begin(write=True) as txn:
-        #    src.empty(txn)
-        #    for doc in dst.find():
-        #        src.append(doc, txn)
-        #    dst.drop(True, txn)
-        #    del self._tables[dst_name]
 
     def table(self, name):
         """

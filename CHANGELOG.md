@@ -1,19 +1,17 @@
 ### Version 0.2
 
-* Restructuring in advance of replication code
-* Made a number of methods private which don't need to be exposed
-* Wrapped everything to allow for three txn options
-* Replication methid
-```
-    # each doc needs a ['_own': bool] field
-    with db.begin():
-        doc = table.seek_one(index,key, own=True)
-        modify doc
-        table.save(doc) [fail if not owner] 
-    => (release)
-    
-    .. maybe yield a class wrapper rather than dict ??
-```
+* Complete restructure to allow for application level transactions (for replication)
+* Privatised some methods that don't need to be exposed
+* Database now has a **.binlog(bool)** function (logging off by default)
+* Database now has **.begin()** and **.end()** methods (begin supports **with**)
+* All **Table** functions should now be wrapped to ensure they're included in repl transactions
+* ORM - we now have a built-in (optional) ORM with support for custom models and custom types
+* ORM - includes support for calculated (virtual) fields and transparent many-to-many links
+* Added README-ORM
+* Main test suite was added to and transaction testing added
+* Two new suites were added for model and ORM testing
+* Tidied up some of the examples and benchmark
+* Updated README to include link to ORM docs and sample benchmark results
 
 ### Version 0.1.35
 

@@ -1,10 +1,10 @@
 from sys import argv
 from pymamba import Database
-from pymamba.models import BaseModel, ManyToMany
-from pymamba.types import DateType, AgeType, NameType, UUIDType
+from pymamba.models import Table, ManyToMany
+from pymamba.types import DateType, AgeType, NameType
 
 
-class UserModel(BaseModel):
+class UserModel(Table):
     """
     Model definition for objects of type 'UserModel'
 
@@ -12,7 +12,6 @@ class UserModel(BaseModel):
     _display holds field definitions for the 'list' function
     """
     _calculated = {
-        'uuid': UUIDType('_id'),
         'dob_ddmmyyyy': DateType('dob'),
         'age': AgeType('dob'),
         'name': NameType(('forename', 'surname'))
@@ -25,21 +24,17 @@ class UserModel(BaseModel):
         {'name': 'postcodes', 'width': 60, 'precision': 60, 'function': '_postcodes'}
     ]
 
-
-    def _postcodes(self):
+    def _postcodes(self, doc):
         pcs = ''
-        for address in self.addresses:
+        for address in doc.addresses:
             if len(pcs):
                 pcs += ' | '
             pcs += address.postcode
-        self.__setattr__('postcodes', format('[{}] {}'.format(len(self.addresses), str(pcs))))
+        self.__setattr__('postcodes', format('[{}] {}'.format(len(doc.addresses), str(pcs))))
 
 
-class AddressModel(BaseModel):
+class AddressModel(Table):
 
-    _calculated = {
-        'uuid': UUIDType('_id')
-    }
     _display = [
         {'name': 'uuid', 'width': 24},
         {'name': 'line1', 'width': 30, 'precision': 30},
@@ -50,25 +45,21 @@ class AddressModel(BaseModel):
     ]
 
 
-def modify():
+def modify_user(key, change):
+    return modify(user_model, key, change)
 
-    for doc in user_model.find():
-        #doc.addresses.append(AddressModel({'line1': 'New Address', 'line2': '456', 'postcode': 'New Postcode'}, table=address_model._table))
-        #print(doc.addresses)
-        #doc.save()
-        doc.addresses[0].postcode = 'CF38 1AD'
-        doc.save()
-        break
-        for address in doc.addresses:
-            #if address.postcode == 'CF38 1AA':
-            print("id_={d.uuid} pc={d.postcode}".format(d=address))
-            doc.addresses.remove(address)
-            del doc.addresses[0]
-                #address.line1 = 'Gareth woz ere'
-            doc.save()
-            break
-        break
 
+def modify_address(key, change):
+    return modify(address_model, key, change)
+
+
+def modify(model, key, change):
+    doc = model.get(key.encode())
+    if not doc:
+        print('Unable to locate key "{}"'.format(key))
+        return
+    doc.modify(change)
+    doc.save()
 
 if __name__ == '__main__':
 
@@ -81,20 +72,25 @@ if __name__ == '__main__':
     #
     commands = {
         'lst': user_model.list,
-        'add': user_model.append,
-        'mod': user_model.modify,
-        'add_address': address_model.append,
-        'mod_address': address_model.modify,
-        'lst_address': address_model.list
+        'add': user_model.add,
+        'mod': modify_user,
+        'lst_address': address_model.list,
+        'add_address': address_model.add,
+        'mod_address': modify_address,
     }
-    #try:
-    commands[argv[1]](*argv[2:])
-    modify()
-    exit()
-    #except IndexError:
-    #    print('Insufficient parameters')
-    #except KeyError:
-    #    print('No such command "{}"'.format(argv[1]))
-    #except Exception as e:
-    #    raise e
-    #print('Usage: {} [{}]'.format(argv[0], '|'.join(list(commands.keys()))))
+    try:
+        commands[argv[1]](*argv[2:])
+        exit()
+    except IndexError:
+        print('Insufficient parameters')
+    except KeyError:
+        print('No such command "{}"'.format(argv[1]))
+    except Exception as e:
+        raise e
+    print('Usage: {} [{}] [parameters]'.format(argv[0], '|'.join(list(commands.keys()))))
+    print('Examples:')
+    print('  python3 lst                                        # list contents of user table')
+    print('  python3 lst_address                                # list contents of address table')
+    print('  python3 mod 59afba1d1839fc03ce96d0c8 surname=Jones # set surname of record')
+    print("  python3 add '{\"forename\":\"John\",\"surname\":\"Smith\", \"dob_ddmmyyyy\":\"01/01/1966\"}' # add record")
+    print('')

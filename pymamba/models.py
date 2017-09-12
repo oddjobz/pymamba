@@ -120,7 +120,8 @@ class Table(object):
         :param key: uuid (primary key)
         :return: record (as a Model)
         """
-        return BaseModel(self._table.get(key), instance=self)
+        doc = self._table.get(key)
+        return BaseModel(doc, instance=self) if doc else None
 
     def find(self):
         """

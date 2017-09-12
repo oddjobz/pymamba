@@ -166,5 +166,24 @@ Name: John Doe             Age: 19
 There's a lot more to come, but so far it's looking pretty promising.
 On my workstation a for-loop based on a **find** yields around **200k** results per second, and an **append** yields around 30k new items per second. This seems to be fairly respectable for a high level language database and seems to be much faster than Mongo when used with either Python or Node.
 
+```text
+** SINGLE Threaded benchmark **
+** Probably better throughput with multiple processes
+
+* No Indecies
+  -     0: 5000 - Append Speed/sec = 48882
+  -  5000: 5000 - Append Speed/sec = 52778
+  - 10000: 5000 - Append Speed/sec = 52882
+* Indexed by sid, day, hour
+  -     0: 5000 - Append Speed/sec = 34420
+  -  5000: 5000 - Append Speed/sec = 36096
+  - 10000: 5000 - Append Speed/sec = 35885
+* Indexed by function
+  -     0: 5000 - Append Speed/sec = 39235
+  -  5000: 5000 - Append Speed/sec = 39822
+  - 10000: 5000 - Append Speed/sec = 41116
+* Linear scan through most recent index
+  -     0:15000 - Read Speed/sec   = 234615
+```
 [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=Y8KQE7TRJV6ZA)
 
