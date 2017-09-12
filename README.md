@@ -160,3 +160,4 @@ There's a lot more to come, but so far it's looking pretty promising.
 On my workstation a for-loop based on a **find** yields around **200k** results per second, and an **append** yields around 30k new items per second. This seems to be fairly respectable for a high level language database and seems to be much faster than Mongo when used with either Python or Node.
 
 [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=Y8KQE7TRJV6ZA)
+
