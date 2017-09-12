@@ -1,5 +1,5 @@
 lmdb==0.93
-pymongo==3.5.1
+pymongo==3.5.0
 ujson==1.35
 ujson-delta==1.1.3
 uuid==1.30
