@@ -4,18 +4,14 @@ from .types import ManyToManyLink
 
 class BaseModel(object):
 
-    _calculated = {}
-    _display = {}
-
     def __init__(self, *args, **kwargs):
         """
         Create a model object based on a supplied dict object
         """
-        self._doc = args[0] if len(args) else {}
-        if 'table' in kwargs:
-            self._table = kwargs['table']
-
-        self._dirty = False
+        self.__dict__['_instance']  = kwargs.get('instance')
+        self.__dict__['_dirty'] = False
+        self.__dict__['_doc'] = args[0] if len(args) else {}
+        self.__dict__['_calculated'] = kwargs.get('instance')._calculated
 
     def __getattr__(self, key):
         """
@@ -23,6 +19,7 @@ class BaseModel(object):
         :param key: field name
         :return: calculated field value
         """
+        if key in self.__dict__: return self.__dict__[key]
         if key in self._calculated:
             return self._calculated[key].from_internal(self._doc)
         if key not in self._doc:
@@ -35,17 +32,15 @@ class BaseModel(object):
         :param key: the attribute name
         :param value: the new value for the attribute
         """
-        if key in ['_table', '_links', '_dirty']:
-            super().__setattr__(key, value)
-        elif key == '_doc':
-            super().__setattr__(key, value)
-            self._dirty = True
+        if key in self.__dict__:
+            self.__dict__[key] = value
+            if key == '_doc': self.__dict__['_dirty'] = True
         elif key not in self._calculated:
             self._doc[key] = value
-            self._dirty = True
+            self.__dict__['_dirty'] = True
         else:
             self._calculated[key].to_internal(self._doc, value)
-            self._dirty = True
+            self.__dict__['_dirty'] = True
 
     def __repr__(self):
         """
@@ -54,33 +49,7 @@ class BaseModel(object):
         """
         return str(self._doc)
 
-    def validate(self):
-        """
-        Validate the current record against any available validators
-        """
-        for field in list(self._doc):
-            if field in self._calculated:
-                self.__setattr__(field, self._doc[field])
-        return self
-
-    def format(self):
-        """
-        Validate the current record against any available validators
-        """
-        for field in self._doc:
-            if field in self._calculated:
-                self._doc[field] = self.__getattr__(field)
-        return self
-
-    def get(self, key):
-        """
-        Get a record from the database using it's UUID
-        :param key: uuid (primary key)
-        :return: record (as a Model)
-        """
-        return self.__class__(self._table.get(key)).format()
-
-    def modify(self, uuid, keyval):
+    def modify(self, keyval):
         """
         Simple single attribute modification routine
         :param uuid: key for record
@@ -89,13 +58,66 @@ class BaseModel(object):
         setattr(self, *keyval.split('='))
         self.save()
 
+    def save(self):
+        """
+        Save this record in the database
+        """
+        if self._dirty:
+            self.validate()
+            self._instance._table.save(self._doc)
+            #self.__dict__['_dirty'] = False
+        self._instance.update_links(self)
+
+    def validate(self):
+        """
+        Validate the current record against any available validators
+        """
+        doc = self.__dict__['_doc']
+        for field in list(doc):
+            if field in self._calculated:
+                self.__setattr__(field, doc[field])
+                del doc[field]
+        return self
+
+
+class Table(object):
+
+    _calculated = {}
+    _display = []
+
+    def __init__(self, *args, **kwargs):
+        """
+        Create a model object based on a supplied dict object
+        """
+        self._table = kwargs.get('table')
+        self._model = kwargs.get('model')
+        self._links = []
+
+    def get(self, key):
+        """
+        Get a record from the database using it's UUID
+        :param key: uuid (primary key)
+        :return: record (as a Model)
+        """
+        return BaseModel(self._table.get(key), instance=self)
+
+        #def format(self):
+        #    """
+        #    Validate the current record against any available validators
+        #    """
+        #    for field in self._doc:
+        #        if field in self._calculated:
+        #            self._doc[field] = self.__getattr__(field)
+        #    return self
+        #return .format()
+
     def find(self):
         """
         Facilitate a sequential search of the database
         :return: the next record (as a Model)
         """
         for doc in self._table.find():
-            yield self.__class__(doc, table=self._table)
+            yield BaseModel(doc, instance=self)
 
     def list(self, *uuids):
         """
@@ -132,8 +154,8 @@ class BaseModel(object):
         if not uuids:
             for doc in self.find():
                 for func in functions:
-                    fn = getattr(doc, func, None)
-                    fn() if fn else None
+                    fn = getattr(self, func, None)
+                    fn(doc) if fn else None
                 print(format_data.format(d=doc))
         else:
             for uuid in uuids:
@@ -188,7 +210,10 @@ class BaseModel(object):
         :param doc: the document to unlink
         :return:
         """
-        item = link._table.seek_one(doc._table._name, {doc._table._name:doc._id.decode()})
+        lhs = link._classB._table._name
+        rhs = link._classA._table._name
+        linkage = {lhs: doc._id.decode(), rhs: context._id.decode()}
+        item = link._table.seek_one(lhs, linkage)
         if not item: raise xForeignKeyViolation('link table item is missing')
         link._table.delete(item['_id'])
 
@@ -196,47 +221,31 @@ class BaseModel(object):
         """
         Append the current record to the Database
         """
-        if type(model) is str:
-            model = loads(model)
-        if type(model) is dict:
-            model = self.__class__(model)
+        model = loads(model) if type(model) is str else model
+        model = BaseModel(model, instance=self) if type(model) is dict else model
         model.validate()
         self._table.append(model._doc)
-        model._dirty = False
         self.update_links(model)
-
-    def save(self):
-        """
-        Save this record in the database
-        """
-        if self._dirty:
-            self.validate()
-            self._table.save(self._doc)
-            self._dirty = False
-        self.update_links(self)
 
     def update_links(self, context):
         #
         #   Process any changes to dependencies
         #
-        for link in context._links:
+        for link in self._links:
             if link._results:
-                for i, doc in enumerate(link._results):
-                    if type(doc) == dict:
-                        doc = link._classB.__class__(doc, table=link._classB._table)
-                        link._results[i] = doc
+                for doc in link._results:
+                    print("Dirty=", doc._dirty)
                     if not doc._id:
                         self.add_dependent(link, doc, context)
                     elif doc._dirty:
                         self.upd_dependent(link, doc, context)
+                        #doc._dirty = False
                 for doc in set(link._original)-set(link._results):
                     self.del_dependent(link, doc, context)
             link._results = None
 
 
 class ManyToMany(object):
-
-    _table = None
 
     def __init__(self, database, classA, classB):
         table = 'rel_{}_{}'.format(classA._table._name, classB._table._name)
@@ -247,10 +256,6 @@ class ManyToMany(object):
         linkB = ManyToManyLink(self._table, classB, classA)
         classA._calculated[classB._table._name] = linkA
         classB._calculated[classA._table._name] = linkB
-        if not hasattr(classA.__class__, "_links"):
-            classA.__class__._links = []
-        if not hasattr(classB.__class__, "_links"):
-            classB.__class__._links = []
         classA._links.append(linkA)
         classB._links.append(linkB)
 

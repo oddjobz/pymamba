@@ -104,6 +104,13 @@ class UUIDType(BaseType):
         return doc[self._vnam].decode()
 
 
+class DirtyList(list):
+
+    def append(self, obj):
+        super().append(obj)
+        obj._dirty = True
+
+
 class ManyToManyLink(BaseType):
 
     _table = None
@@ -121,12 +128,12 @@ class ManyToManyLink(BaseType):
 
     def from_internal(self, doc):
         if not self._results:
-            self._results = []
+            self._results = DirtyList()
             if '_id' in doc:
                 key = {self._src_key: doc['_id'].decode()}
                 for link in self._table.seek(self._src_key, key):
                     dst_key = link[self._dst_key].encode()
-                    target = self._classB._table.get(dst_key)
-                    self._results.append(self._classB.__class__(target, table=self._classB._table))
+                    self._results.append(self._classB.get(dst_key))
                 self._original = self._results[:]
         return self._results
+

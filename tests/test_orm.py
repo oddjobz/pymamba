@@ -3,12 +3,12 @@
 import unittest
 import pytest
 from pymamba import Database
-from pymamba.models import BaseModel, ManyToMany
+from pymamba.models import BaseModel, ManyToMany, Table
 from pymamba.types import DateType, AgeType, NameType, UUIDType
 from subprocess import call
-from time import sleep
 
-class UserModel(BaseModel):
+
+class UserModel(Table):
     """
     Model definition for objects of type 'UserModel'
 
@@ -28,11 +28,11 @@ class UserModel(BaseModel):
         {'name': 'postcodes', 'width': 20, 'precision': 20, 'function': '_postcodes'}
     ]
 
-    def _postcodes(self):
-        self.__setattr__('postcodes', 'Ok')
+    def _postcodes(self, doc):
+        doc.__setattr__('postcodes', 'Ok')
 
 
-class AddressModel(BaseModel):
+class AddressModel(Table):
 
     _calculated = {
         'uuid': UUIDType('_id')
@@ -50,14 +50,15 @@ class AddressModel(BaseModel):
 class UnitTests(unittest.TestCase):
 
     def setUp(self):
-        call(['rm', '-rf', "databases/test_orm"])
-        self._database = Database('databases/test_orm', {'env': {'map_size': 1024 * 1024 * 10}})
+        call(['rm', '-rf', "test_orm"])
+        self._database = Database('test_orm', {'env': {'map_size': 1024 * 1024 * 10}})
         self._user_model = UserModel(table=self._database.table('users'))
         self._address_model = AddressModel(table=self._database.table('addresses'))
         self._links = ManyToMany(self._database, self._user_model, self._address_model)
 
     def tearDown(self):
         self._database.close()
+        call(['rm', '-rf', "test_orm"])
 
     def generate_data_1(self):
         self._user_model.add({"forename":"tom", "surname": "smith", "dob_ddmmyyyy": "01/01/1971", "uid": 1})
@@ -76,33 +77,53 @@ class UnitTests(unittest.TestCase):
     def capfd(self, capfd):
         self.capfd = capfd
 
-    def test_check_records(self):
+    def test_01_check_records(self):
         self.generate_data_1()
         self.assertEqual(self._user_model._table.records, 7)
         self.assertEqual(self._address_model._table.records, 4)
 
-    def test_add_new_address(self):
+    def test_02_add_new_address(self):
         self.generate_data_1()
         doc = list(self._user_model.find())[0]
-        doc.addresses.append(AddressModel({"line1": "Address line 1 # 5", "line2": "Address line 25","postcode": "CFXX 1DE"}))
+        doc.addresses.append(
+            BaseModel(
+                {"line1": "Address line 1 # 5", "line2": "Address line 25","postcode": "CFXX 1DE"},
+                instance=self._address_model
+            )
+        )
         doc.save()
         doc = list(self._user_model.find())[0]
-        doc.addresses.append(AddressModel({"line1": "Address line 1 # 6", "line2": "Address line 26", "postcode":"CFXX 1DF"}))
+        doc.addresses.append(
+            BaseModel(
+                {"line1": "Address line 1 # 6", "line2": "Address line 26", "postcode":"CFXX 1DF"},
+                instance=self._address_model
+            )
+        )
         doc.save()
         doc = list(self._user_model.find())[0]
         self.assertEqual(doc.addresses[0].postcode, 'CFXX 1DE')
         self.assertEqual(doc.addresses[1].postcode, 'CFXX 1DF')
 
-        self._database.drop('users')
-        self._database.drop('addresses')
-        self._user_model = UserModel(table=self._database.table('users'))
-        self._address_model = AddressModel(table=self._database.table('addresses'))
+    #    self._database.drop('users')
+    #    self._database.drop('addresses')
+    #    self._user_model = UserModel(table=self._database.table('users'))
+    #    self._address_model = AddressModel(table=self._database.table('addresses'))
 
-    def test_update_address(self):
+    def test_03_update_address(self):
         self.generate_data_1()
         doc = list(self._user_model.find())[0]
-        doc.addresses.append({"line1":"Address line 1 # 5", "line2": "Address line 25","postcode":"CFXX 1DE"})
-        doc.addresses.append({"line1":"Address line 1 # 6", "line2": "Address line 26", "postcode":"CFXX 1DF"})
+        doc.addresses.append(
+            BaseModel(
+                {"line1":"Address line 1 # 5", "line2": "Address line 25","postcode":"CFXX 1DE"},
+                instance=self._address_model
+            )
+        )
+        doc.addresses.append(
+            BaseModel(
+                {"line1":"Address line 1 # 6", "line2": "Address line 26", "postcode":"CFXX 1DF"},
+                instance=self._address_model
+            )
+        )
         doc.save()
         doc = list(self._user_model.find())[0]
         doc.addresses[0].postcode += '!'
@@ -116,11 +137,17 @@ class UnitTests(unittest.TestCase):
         self.generate_data_1()
         doc = list(self._user_model.find())[0]
         doc.addresses.append(
-            AddressModel({"line1": "Address line 1 # 5", "line2": "Address line 25", "postcode": "CFXX 1DE"},
-                         table=self._address_model._table))
+            BaseModel(
+                {"line1": "Address line 1 # 5", "line2": "Address line 25", "postcode": "CFXX 1DE"},
+                instance=self._address_model
+            )
+        )
         doc.addresses.append(
-            AddressModel({"line1": "Address line 1 # 6", "line2": "Address line 26", "postcode": "CFXX 1DF"},
-                         table=self._address_model._table))
+            BaseModel(
+                {"line1": "Address line 1 # 6", "line2": "Address line 26", "postcode": "CFXX 1DF"},
+                instance=self._address_model
+            )
+        )
         doc.save()
         doc = list(self._user_model.find())[0]
         del doc.addresses[0]
@@ -129,77 +156,90 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(doc.addresses[0].postcode, 'CFXX 1DF')
         self.assertEqual(len(doc.addresses), 1)
 
-    def test_formatting_function(self):
+    def test_05_formatting_function(self):
         self.generate_data_1()
-
         self._user_model.list()
         out, err = self.capfd.readouterr()
         with open('tests/test_orm_table1.txt') as io:
             compare = io.read()
+        self.maxDiff = None
         self.assertEqual(compare, out)
 
-    def test_add_with_linked(self):
+    def test_06_add_with_linked(self):
         self.generate_data_1()
         doc = list(self._user_model.find())[0]
-        doc.addresses.append({'line1': 'NEW LINE', 'postcode': 'NEW'})
+        doc.addresses.append(
+            BaseModel(
+                {'line1': 'NEW LINE', 'postcode': 'NEW'},
+                instance=self._address_model
+            )
+        )
+        doc.addresses.append(
+            BaseModel(
+                {'line1': 'NEW LINE1', 'postcode': 'NEW1'},
+                instance=self._address_model
+            )
+        )
         doc.save()
+        self.assertEqual(doc.addresses[0].postcode, 'NEW')
+        self.assertEqual(len(doc.addresses), 2)
+
+        doc = list(self._user_model.find())[0]
+        self.assertEqual(doc.addresses[1].postcode, 'NEW1')
+        self.assertEqual(len(doc.addresses), 2)
+
+        self._database.close()
+        self._database = Database('test_orm', {'env': {'map_size': 1024 * 1024 * 10}})
+        self._user_model = UserModel(table=self._database.table('users'))
+        self._address_model = AddressModel(table=self._database.table('addresses'))
+        self._links = ManyToMany(self._database, self._user_model, self._address_model)
+
         doc = list(self._user_model.find())[0]
         self.assertEqual(doc.addresses[0].postcode, 'NEW')
+        self.assertEqual(doc.addresses[1].postcode, 'NEW1')
+        self.assertEqual(len(doc.addresses), 2)
+
+    def test_07_complex(self):
+        self.generate_data_1()
+        doc = list(self._user_model.find())[0]
+        doc.addresses.append(
+            BaseModel(
+                {'address': 'address1', 'postcode': 'postcode1'},
+                instance=self._address_model
+            )
+        )
+        doc.addresses.append(
+            BaseModel(
+                {'address': 'address2', 'postcode': 'postcode2'},
+                instance=self._address_model
+            )
+        )
+        doc.save()
+        doc = list(self._user_model.find())[0]
+        self.assertEqual(len(doc.addresses), 2)
+        del doc.addresses[0]
+        doc.save()
+        doc = list(self._user_model.find())[0]
         self.assertEqual(len(doc.addresses), 1)
+        self.assertEqual(doc.addresses[0].postcode, 'postcode2')
+        address = list(self._address_model.find())[0]
+        doc.addresses.append(address)
+        doc.save()
+        self.assertEqual(len(doc.addresses), 2)
+        doc = list(self._user_model.find())[0]
+        doc.addresses[0].postcode="GB"
+        doc.save()
 
+        self._database.close()
+        self._database = Database('test_orm', {'env': {'map_size': 1024 * 1024 * 10}})
+        self._user_model = UserModel(table=self._database.table('users'))
+        self._address_model = AddressModel(table=self._database.table('addresses'))
+        self._links = ManyToMany(self._database, self._user_model, self._address_model)
 
+        doc = list(self._user_model.find())[0]
+        self.assertEqual(len(doc.addresses), 2)
+        self.assertEqual(doc.addresses[0].postcode, 'GB')
 
-    #def test_check_get(self):
-    #    self.generate_data_1()
-    #    for doc in self._model.find():
-    #        get = self._model.get(doc._id)
-    #        self.assertEqual(str(doc), str(get))
-    #    self.assertEqual(len(doc.fred), 0)
-
-    #def test_check_set(self):
-    #    self.generate_data_1()
-    #    for doc in self._model.find():
-    #        doc.surname = 'CHANGED'
-    #        doc.save()
-    #        get = self._model.get(doc._id)
-    #        self.assertEqual(get.surname, "CHANGED")
-
-    #def test_check_modify(self):
-    #    self.generate_data_1()
-    #    for doc in self._model.find():
-    #        self._model.modify(doc.uuid, 'forename=ME')
-    #        get = self._model.get(doc._id)
-    #        self.assertEqual(get.forename, "ME")
-
-    #def test_check_list(self):
-    #    self.generate_data_1()
-    #    self._model.list()
-    #    out, err = self.capfd.readouterr()
-    #    with open('tests/test_models_table1.txt') as io:
-    #        compare = io.read()
-     #   self.assertEqual(compare, out)
-     #   for doc in self._model.find():
-     #       self._model.list(str(doc._id.decode()))
-     #       break
-     #   out, err = self.capfd.readouterr()
-     #   with open('tests/test_models_table2.txt') as io:
-     #       compare = io.read()
-     #   self.assertEqual(compare, out)
-
-    #def test_data_type_name(self):
-    #    age = AgeType('dob')
-    #    self.assertEqual(age.name, 'dob')
-
-    #def test_from_internal(self):
-    #    name = BaseType('name')
-    #    doc = {'name': 'fred'}
-    #    self.assertEqual(name.from_internal(doc), 'fred')
-
-    #def test_to_internal(self):
-    #    name = BaseType('name')
-    #    doc = {'name': 'fred'}
-    #    name.to_internal(doc, 'jim')
-    #    self.assertEqual(name.from_internal(doc), 'jim')
 
 if __name__ == "__main__":
     test = UnitTests()

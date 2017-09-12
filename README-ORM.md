@@ -67,7 +67,7 @@ If you save this to a file (demo.py) you should then be able to do the following
 | fred                 | bloggs               |        28857600 |  46 | 
 +----------------------+----------------------+-----------------+-----+
 ```
-Note that age isn't a stored field, it's generated on the fly from the 'dob' field hence
+Note that *age* isn't a stored field, it's generated on the fly from the 'dob' field hence
 will dynamically change whenever the dob field is updated. Also, the *list* function is
 driven (by default) by the attributes listed in *_display*.
 

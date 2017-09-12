@@ -3,12 +3,12 @@
 import unittest
 import pytest
 from pymamba import Database
-from pymamba.models import BaseModel
+from pymamba.models import Table
 from pymamba.types import BaseType, DateType, AgeType, NameType, UUIDType
 from subprocess import call
 
 
-class Model(BaseModel):
+class Model(Table):
     """
     Implement a model that covers all data-types
     """
@@ -24,6 +24,7 @@ class Model(BaseModel):
         {'name': 'age', 'width': 3},
         {'name': 'dob_ddmmyyyy', 'width': 10}
     ]
+
 
 class UnitTests(unittest.TestCase):
 
@@ -54,6 +55,7 @@ class UnitTests(unittest.TestCase):
     def test_check_records(self):
         self.generate_data_1()
         self.assertEqual(self._model._table.records, 7)
+        self._model.list()
 
     def test_check_get(self):
         self.generate_data_1()
@@ -61,6 +63,7 @@ class UnitTests(unittest.TestCase):
             get = self._model.get(doc._id)
             self.assertEqual(str(doc), str(get))
         self.assertEqual(len(doc.fred), 0)
+        x = doc.uuid
 
     def test_check_set(self):
         self.generate_data_1()
@@ -73,7 +76,7 @@ class UnitTests(unittest.TestCase):
     def test_check_modify(self):
         self.generate_data_1()
         for doc in self._model.find():
-            doc.modify(doc.uuid, 'forename=ME')
+            doc.modify('forename=ME')
             get = self._model.get(doc._id)
             self.assertEqual(get.forename, "ME")
 
