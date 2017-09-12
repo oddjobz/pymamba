@@ -1,17 +1,20 @@
 from json import loads
-from .types import ManyToManyLink
+from .types import BaseType
 
 
 class BaseModel(object):
 
     def __init__(self, *args, **kwargs):
         """
-        Create a model object based on a supplied dict object
+        Create a new instance of BaseModel which will wrap a model (dict item)
+        :param args: a dict item that constitutes a record
+        :param kwargs: 'instance', points to an instance of 'Table'
         """
-        self.__dict__['_instance']  = kwargs.get('instance')
+        instance = kwargs.get('instance')
+        self.__dict__['_instance'] = instance
         self.__dict__['_dirty'] = False
         self.__dict__['_doc'] = args[0] if len(args) else {}
-        self.__dict__['_calculated'] = kwargs.get('instance')._calculated
+        self.__dict__['_calculated'] = instance.calculated
 
     def __getattr__(self, key):
         """
@@ -19,12 +22,9 @@ class BaseModel(object):
         :param key: field name
         :return: calculated field value
         """
-        if key in self.__dict__: return self.__dict__[key]
         if key in self._calculated:
-            return self._calculated[key].from_internal(self._doc)
-        if key not in self._doc:
-            return ''
-        return self._doc[key]
+            return self._calculated[key].from_internal(self.__dict__['_doc'])
+        return self.__dict__['_doc'].get(key, '')
 
     def __setattr__(self, key, value):
         """
@@ -34,7 +34,6 @@ class BaseModel(object):
         """
         if key in self.__dict__:
             self.__dict__[key] = value
-            if key == '_doc': self.__dict__['_dirty'] = True
         elif key not in self._calculated:
             self._doc[key] = value
             self.__dict__['_dirty'] = True
@@ -47,12 +46,11 @@ class BaseModel(object):
         Default display string
         :return: string representation of the record
         """
-        return str(self._doc)
+        return str(self.__dict__['_doc'])
 
     def modify(self, keyval):
         """
         Simple single attribute modification routine
-        :param uuid: key for record
         :param keyval: key=val string
         """
         setattr(self, *keyval.split('='))
@@ -64,20 +62,43 @@ class BaseModel(object):
         """
         if self._dirty:
             self.validate()
-            self._instance._table.save(self._doc)
-            #self.__dict__['_dirty'] = False
+            self._instance.save(self._doc)
         self._instance.update_links(self)
 
     def validate(self):
         """
         Validate the current record against any available validators
         """
-        doc = self.__dict__['_doc']
-        for field in list(doc):
+        for field in list(self.__dict__['_doc']):
             if field in self._calculated:
-                self.__setattr__(field, doc[field])
-                del doc[field]
+                self.__setattr__(field, self.__dict__['_doc'][field])
+                del self.__dict__['_doc'][field]
         return self
+
+    def is_new(self):
+        """
+        Determine if this is a new record that has yet to be written to the DB
+        :return: bool
+        """
+        return '_id' not in self.__dict__['_doc']
+
+    def is_dirty(self):
+        """
+        Determine if this record is dirty and needs to be written
+        :return: bool
+        """
+        return self.__dict__['_dirty']
+
+    def doc(self):
+        return self._doc
+
+    @property
+    def uuid(self):
+        """
+        Convenience function to return the record's _id as a native string
+        :return: str (uuid)
+        """
+        return self.__dict__['_doc']['_id'].decode()
 
 
 class Table(object):
@@ -85,12 +106,12 @@ class Table(object):
     _calculated = {}
     _display = []
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         """
         Create a model object based on a supplied dict object
+        o table, is the database table we map to
         """
         self._table = kwargs.get('table')
-        self._model = kwargs.get('model')
         self._links = []
 
     def get(self, key):
@@ -100,16 +121,6 @@ class Table(object):
         :return: record (as a Model)
         """
         return BaseModel(self._table.get(key), instance=self)
-
-        #def format(self):
-        #    """
-        #    Validate the current record against any available validators
-        #    """
-        #    for field in self._doc:
-        #        if field in self._calculated:
-        #            self._doc[field] = self.__getattr__(field)
-        #    return self
-        #return .format()
 
     def find(self):
         """
@@ -122,7 +133,7 @@ class Table(object):
     def list(self, *uuids):
         """
         Generic boxed listing routine
-        :param uuid: the options uuid(s) to display
+        :param uuids: the options uuid(s) to display
         :return:
         """
         fields = []
@@ -163,103 +174,198 @@ class Table(object):
                 print(format_data.format(d=doc))
         print(line)
 
-    def add_link(self, link, doc, context):
-        """
-        Add an entry to the link table
-        :param link: link definition
-        :param doc: the document containing the relevant details
-        :param context: the document to link to
-        :return:
-        """
-        lhs = link._classB._table._name
-        rhs = link._classA._table._name
-        linkage = {lhs: doc._id.decode(), rhs: context._id.decode()}
-        link._table.append(linkage)
-
-    def add_dependent(self, link, doc, context):
-        """
-        Add a new dependent item
-        :param link:
-        :param doc:
-        :return:
-        """
-        link._classB._table.append(doc._doc)
-        self.add_link(link, doc, context)
-
-    def upd_dependent(self, link, doc, context):
-        """
-        Update a dependent record
-        :param link:
-        :param doc:
-        :return:
-        """
-        lhs = link._classB._table._name
-        rhs = link._classA._table._name
-        if doc._dirty:
-            doc.validate()
-            link._classB._table.save(doc._doc)
-            doc._dirty = False
-        linkage = {lhs: doc._id.decode(), rhs: context._id.decode()}
-        item = link._table.seek_one(lhs, linkage)
-        self.add_link(link, doc, context) if not item else None
-
-    def del_dependent(self, link, doc, context):
-        """
-        Delete a link to a record in a dependent table
-        :param link: the link table
-        :param doc: the document to unlink
-        :return:
-        """
-        lhs = link._classB._table._name
-        rhs = link._classA._table._name
-        linkage = {lhs: doc._id.decode(), rhs: context._id.decode()}
-        item = link._table.seek_one(lhs, linkage)
-        if not item: raise xForeignKeyViolation('link table item is missing')
-        link._table.delete(item['_id'])
-
-    def add(self, model):
+    def add(self, doc):
         """
         Append the current record to the Database
+        :param doc: is the document to add, it can be JSON, dict or BaseModel
         """
-        model = loads(model) if type(model) is str else model
-        model = BaseModel(model, instance=self) if type(model) is dict else model
-        model.validate()
-        self._table.append(model._doc)
-        self.update_links(model)
+        doc = loads(doc) if type(doc) is str else doc
+        doc = BaseModel(doc, instance=self) if type(doc) is dict else doc
+        doc.validate()
+        self._table.append(doc.doc())
+        self.update_links(doc)
 
     def update_links(self, context):
-        #
-        #   Process any changes to dependencies
-        #
+        """
+        Update any linkages attached to this model
+        :param context: the base we're updating against
+        """
         for link in self._links:
             if link._results:
                 for doc in link._results:
-                    print("Dirty=", doc._dirty)
-                    if not doc._id:
-                        self.add_dependent(link, doc, context)
-                    elif doc._dirty:
-                        self.upd_dependent(link, doc, context)
-                        #doc._dirty = False
-                for doc in set(link._original)-set(link._results):
-                    self.del_dependent(link, doc, context)
+                    if doc.is_new():
+                        link.add_dependent(doc, context)
+                    elif doc.is_dirty():
+                        link.upd_dependent(doc, context)
+                link.deletions(context)
             link._results = None
+
+    def save(self, doc):
+        """
+        Simple interface to the database 'save' method
+        :param doc: the document (dict) to save
+        """
+        self._table.save(doc)
+
+    def append(self, doc):
+        """
+        Simple interface to the database 'append' method
+        :param doc: the document (dict) to append
+        """
+        self._table.append(doc)
+
+    def add_calculated(self, key, val):
+        """
+        Add a new link field to the list of calculated fields for this model
+        :param key: calculated field name
+        :param val: a Link object
+        """
+        self._calculated[key] = val
+        self._links.append(val)
+
+    @property
+    def table_name(self):
+        """
+        Simple property to return the database table name
+        :return: str
+        """
+        return self._table.name
+
+    @property
+    def calculated(self):
+        """
+        Simple property to return the _calculated property
+        :return: str
+        """
+        return self._calculated
 
 
 class ManyToMany(object):
+    """
+    This class represents a connection between two tables
+    """
+    def __init__(self, database, class_a, class_b):
+        """
+        Create a new instance
+        :param database: the database we are using
+        :param class_a: the first instance of Table
+        :param class_b: the second instance of Table
+        """
+        table_name = 'rel_{}_{}'.format(class_a.table_name, class_b.table_name)
+        table = self._table = database.table(table_name)
+        table.index(class_a.table_name, '{{{}}}'.format(class_a.table_name), duplicates=True)
+        table.index(class_b.table_name, '{{{}}}'.format(class_b.table_name), duplicates=True)
+        class_a.add_calculated(class_b.table_name, ManyToManyLink(table, class_a, class_b))
+        class_b.add_calculated(class_a.table_name, ManyToManyLink(table, class_b, class_a))
 
-    def __init__(self, database, classA, classB):
-        table = 'rel_{}_{}'.format(classA._table._name, classB._table._name)
-        self._table = database.table(table)
-        self._table.index(classA._table._name, '{{{}}}'.format(classA._table._name), duplicates=True)
-        self._table.index(classB._table._name, '{{{}}}'.format(classB._table._name), duplicates=True)
-        linkA = ManyToManyLink(self._table, classA, classB)
-        linkB = ManyToManyLink(self._table, classB, classA)
-        classA._calculated[classB._table._name] = linkA
-        classB._calculated[classA._table._name] = linkB
-        classA._links.append(linkA)
-        classB._links.append(linkB)
+
+class DirtyList(list):
+    """
+    This is a customised implementation of list that tracks when new items are added and when
+    they are, convert them to a BaseClass type and set their dirty flag to true.
+    """
+
+    def __init__(self, instance):
+        """
+        Create a new list
+        :param instance: the model instance we're attached to
+        """
+        super().__init__([])
+        self._instance = instance
+
+    def append(self, obj):
+        """
+        Append a new item to the list
+        :param obj: the object to append (either a BaseModel or dict)
+        """
+        if type(obj) == dict:
+            obj = BaseModel(obj, instance=self._instance)
+        super().append(obj)
+        obj.__dict__['_dirty'] = True
 
 
-class xForeignKeyViolation(BaseException):
+class ManyToManyLink(BaseType):
+
+    def __init__(self, table, class_a, class_b):
+        """
+        Create an object linking two classes on link table
+        :param table: a reference to the link table
+        :param class_a: The master class
+        :param class_b: The slave class
+        """
+        self._table = table
+        self._classA = class_a
+        self._classB = class_b
+        self._src_key = self._classA.table_name
+        self._dst_key = self._classB.table_name
+        self._results = None
+        self._original = None
+        super().__init__(self._dst_key)
+
+    def deletions(self, context):
+        """
+        Delete links to models that no longer exist
+        :param context: the master document
+        """
+        for doc in set(self._original) - set(self._results):
+            lhs = self._classB.table_name
+            rhs = self._classA.table_name
+            linkage = {lhs: doc.uuid, rhs: context.uuid}
+            item = self._table.seek_one(lhs, linkage)
+            if not item: raise PyMambaForeignKeyViolation('link table item is missing')
+            self._table.delete(item['_id'])
+
+    def from_internal(self, doc):
+        """
+        Present the contrived field as a list containing linked records
+        :param doc: our current document
+        :return: a list containing linked records
+        """
+        if not self._results:
+            self._results = DirtyList(self._classB)
+            if '_id' in doc:
+                key = {self._src_key: doc['_id'].decode()}
+                for link in self._table.seek(self._src_key, key):
+                    self._results.append(self._classB.get(link[self._dst_key].encode()))
+                self._original = self._results[:]
+        return self._results
+
+    def add_link(self, doc, context):
+        """
+        Add a new entry to the link table
+        :param doc: the document we're linking to
+        :param context: the master document we're linking from
+        """
+        lhs = self._classB.table_name
+        rhs = self._classA.table_name
+        linkage = {lhs: doc.uuid, rhs: context.uuid}
+        self._table.append(linkage)
+
+    def add_dependent(self, doc, context):
+        """
+        Commit the current document and add an appropriate link to it
+        :param doc: the document we're writing
+        :param context: the master document we're linking from
+        """
+        self._classB.append(doc.doc())
+        self.add_link(doc, context)
+
+    def upd_dependent(self, doc, context):
+        """
+        Update a dependent record that has been changed
+        :param doc: the document that has changed
+        :param context: the master document
+        """
+        lhs = self._classB.table_name
+        rhs = self._classA.table_name
+        if doc._dirty:
+            doc.validate()
+            self._classB.save(doc.doc())
+            doc._dirty = False
+        linkage = {lhs: doc.uuid, rhs: context.uuid}
+        item = self._table.seek_one(lhs, linkage)
+        self.add_link(doc, context) if not item else None
+
+
+class PyMambaForeignKeyViolation(BaseException):
     """Foreign key entry is missing"""
-

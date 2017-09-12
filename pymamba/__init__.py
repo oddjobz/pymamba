@@ -793,6 +793,16 @@ class Table(object):
         with self._env.begin() as txn:
             return txn.stat(self._db).get('entries', 0)
 
+    @property
+    def name(self):
+        """
+        PROPERTY - Recover the name of this table
+
+        :getter: Table Name
+        :type: str
+        """
+        return self._name
+
 
 def _debug(self, msg):
     """

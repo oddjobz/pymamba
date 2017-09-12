@@ -3,8 +3,8 @@
 import unittest
 import pytest
 from pymamba import Database
-from pymamba.models import BaseModel, ManyToMany, Table
-from pymamba.types import DateType, AgeType, NameType, UUIDType
+from pymamba.types import DateType, AgeType, NameType
+from pymamba.models import ManyToMany, Table
 from subprocess import call
 
 
@@ -16,7 +16,6 @@ class UserModel(Table):
     _display holds field definitions for the 'list' function
     """
     _calculated = {
-        'uuid': UUIDType('_id'),
         'dob_ddmmyyyy': DateType('dob'),
         'age': AgeType('dob'),
         'name': NameType(('forename', 'surname'))
@@ -35,7 +34,6 @@ class UserModel(Table):
 class AddressModel(Table):
 
     _calculated = {
-        'uuid': UUIDType('_id')
     }
     _display = [
         {'name': 'uuid', 'width': 24},
@@ -85,45 +83,20 @@ class UnitTests(unittest.TestCase):
     def test_02_add_new_address(self):
         self.generate_data_1()
         doc = list(self._user_model.find())[0]
-        doc.addresses.append(
-            BaseModel(
-                {"line1": "Address line 1 # 5", "line2": "Address line 25","postcode": "CFXX 1DE"},
-                instance=self._address_model
-            )
-        )
+        doc.addresses.append({"line1": "Address line 1 # 5", "line2": "Address line 25","postcode": "CFXX 1DE"})
         doc.save()
         doc = list(self._user_model.find())[0]
-        doc.addresses.append(
-            BaseModel(
-                {"line1": "Address line 1 # 6", "line2": "Address line 26", "postcode":"CFXX 1DF"},
-                instance=self._address_model
-            )
-        )
+        doc.addresses.append({"line1": "Address line 1 # 6", "line2": "Address line 26", "postcode":"CFXX 1DF"})
         doc.save()
         doc = list(self._user_model.find())[0]
         self.assertEqual(doc.addresses[0].postcode, 'CFXX 1DE')
         self.assertEqual(doc.addresses[1].postcode, 'CFXX 1DF')
 
-    #    self._database.drop('users')
-    #    self._database.drop('addresses')
-    #    self._user_model = UserModel(table=self._database.table('users'))
-    #    self._address_model = AddressModel(table=self._database.table('addresses'))
-
     def test_03_update_address(self):
         self.generate_data_1()
         doc = list(self._user_model.find())[0]
-        doc.addresses.append(
-            BaseModel(
-                {"line1":"Address line 1 # 5", "line2": "Address line 25","postcode":"CFXX 1DE"},
-                instance=self._address_model
-            )
-        )
-        doc.addresses.append(
-            BaseModel(
-                {"line1":"Address line 1 # 6", "line2": "Address line 26", "postcode":"CFXX 1DF"},
-                instance=self._address_model
-            )
-        )
+        doc.addresses.append({"line1":"Address line 1 # 5", "line2": "Address line 25","postcode":"CFXX 1DE"})
+        doc.addresses.append({"line1":"Address line 1 # 6", "line2": "Address line 26", "postcode":"CFXX 1DF"})
         doc.save()
         doc = list(self._user_model.find())[0]
         doc.addresses[0].postcode += '!'
@@ -136,18 +109,8 @@ class UnitTests(unittest.TestCase):
     def test_04_delete_address(self):
         self.generate_data_1()
         doc = list(self._user_model.find())[0]
-        doc.addresses.append(
-            BaseModel(
-                {"line1": "Address line 1 # 5", "line2": "Address line 25", "postcode": "CFXX 1DE"},
-                instance=self._address_model
-            )
-        )
-        doc.addresses.append(
-            BaseModel(
-                {"line1": "Address line 1 # 6", "line2": "Address line 26", "postcode": "CFXX 1DF"},
-                instance=self._address_model
-            )
-        )
+        doc.addresses.append({"line1": "Address line 1 # 5", "line2": "Address line 25", "postcode": "CFXX 1DE"})
+        doc.addresses.append({"line1": "Address line 1 # 6", "line2": "Address line 26", "postcode": "CFXX 1DF"})
         doc.save()
         doc = list(self._user_model.find())[0]
         del doc.addresses[0]
@@ -168,18 +131,8 @@ class UnitTests(unittest.TestCase):
     def test_06_add_with_linked(self):
         self.generate_data_1()
         doc = list(self._user_model.find())[0]
-        doc.addresses.append(
-            BaseModel(
-                {'line1': 'NEW LINE', 'postcode': 'NEW'},
-                instance=self._address_model
-            )
-        )
-        doc.addresses.append(
-            BaseModel(
-                {'line1': 'NEW LINE1', 'postcode': 'NEW1'},
-                instance=self._address_model
-            )
-        )
+        doc.addresses.append({'line1': 'NEW LINE', 'postcode': 'NEW'})
+        doc.addresses.append({'line1': 'NEW LINE1', 'postcode': 'NEW1'})
         doc.save()
         self.assertEqual(doc.addresses[0].postcode, 'NEW')
         self.assertEqual(len(doc.addresses), 2)
@@ -202,18 +155,8 @@ class UnitTests(unittest.TestCase):
     def test_07_complex(self):
         self.generate_data_1()
         doc = list(self._user_model.find())[0]
-        doc.addresses.append(
-            BaseModel(
-                {'address': 'address1', 'postcode': 'postcode1'},
-                instance=self._address_model
-            )
-        )
-        doc.addresses.append(
-            BaseModel(
-                {'address': 'address2', 'postcode': 'postcode2'},
-                instance=self._address_model
-            )
-        )
+        doc.addresses.append({'address': 'address1', 'postcode': 'postcode1'})
+        doc.addresses.append({'address': 'address2', 'postcode': 'postcode2'})
         doc.save()
         doc = list(self._user_model.find())[0]
         self.assertEqual(len(doc.addresses), 2)

@@ -5,7 +5,7 @@ all:
 	@echo "Current version is: $(VERSION)"
 
 test:
-	pytest --cov=pymamba --cov-report=term-missing 
+	PYTHONPATH=. pytest --cov=pymamba --cov-report=term-missing 
 
 clean:
 	@rm -rfv unit-db

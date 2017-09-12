@@ -1,6 +1,7 @@
 .build
 .idea
 people_database
+databases
 test_models
 __pycache__
 unit-db

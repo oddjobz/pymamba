@@ -4,7 +4,7 @@ import unittest
 import pytest
 from pymamba import Database
 from pymamba.models import Table
-from pymamba.types import BaseType, DateType, AgeType, NameType, UUIDType
+from pymamba.types import BaseType, DateType, AgeType, NameType
 from subprocess import call
 
 
@@ -13,7 +13,6 @@ class Model(Table):
     Implement a model that covers all data-types
     """
     _calculated = {
-        'uuid': UUIDType('_id'),
         'dob_ddmmyyyy': DateType('dob'),
         'age': AgeType('dob'),
         'name': NameType(('forename', 'surname'))
