@@ -29,7 +29,7 @@ to deploy and maintain*)
 There is now a native ORM style interface now available. It's very new and there are
 some features that haven't yet been implemented, so be gentle with it. There's some
 initial documentation here;
-* [README-ORM.md](https://oddjobz.github.io/pymamba/README-ORM.md)
+* [README-ORM.md](https://oddjobz.github.io/pymamba/README-ORM.html)
 
 ###### Useful links to other documentation:
 * [Sphinx API documentation](https://pymamba.linux.co.uk)
