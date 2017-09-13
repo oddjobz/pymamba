@@ -32,8 +32,7 @@ class BaseModel(object):
         :param key: the attribute name
         :param value: the new value for the attribute
         """
-        if key in self.__dict__:
-            self.__dict__[key] = value
+        if key in self.__dict__: self.__dict__[key] = value
         elif key not in self._calculated:
             self._doc[key] = value
             self.__dict__['_dirty'] = True
@@ -82,12 +81,14 @@ class BaseModel(object):
         """
         return '_id' not in self.__dict__['_doc']
 
-    def is_dirty(self):
+    def is_dirty(self, dirty=None):
         """
         Determine if this record is dirty and needs to be written
         :return: bool
         """
-        return self.__dict__['_dirty']
+        if dirty is None:
+            return self.__dict__['_dirty']
+        self.__dict__['_dirty'] = dirty
 
     def doc(self):
         return self._doc
@@ -122,8 +123,6 @@ class Table(object):
         """
         doc = self._table.get(key)
         return BaseModel(doc, instance=self) if doc else None
-
-    #def find(self, index=None, expression=None, limit=maxsize, txn=None, abort=False):
 
     def find(self, **kwargs):
         """
@@ -257,10 +256,13 @@ class ManyToMany(object):
         :param class_a: the first instance of Table
         :param class_b: the second instance of Table
         """
+        a = class_a.table_name
+        b = class_b.table_name
         table_name = 'rel_{}_{}'.format(class_a.table_name, class_b.table_name)
         table = self._table = database.table(table_name)
-        table.index(class_a.table_name, '{{{}}}'.format(class_a.table_name), duplicates=True)
-        table.index(class_b.table_name, '{{{}}}'.format(class_b.table_name), duplicates=True)
+        table.index(a, '{{{}}}'.format(a), duplicates=True)
+        table.index(b, '{{{}}}'.format(b), duplicates=True)
+        table.index(a+b, '{{{}}}{{{}}}'.format(a,b), duplicates=False)
         class_a.add_calculated(class_b.table_name, ManyToManyLink(table, class_a, class_b))
         class_b.add_calculated(class_a.table_name, ManyToManyLink(table, class_b, class_a))
 
@@ -287,7 +289,7 @@ class DirtyList(list):
         if type(obj) == dict:
             obj = BaseModel(obj, instance=self._instance)
         super().append(obj)
-        obj.__dict__['_dirty'] = True
+        obj.is_dirty(True)
         return obj
 
 
@@ -309,20 +311,6 @@ class ManyToManyLink(BaseType):
         self._original = []
         self._uuid = None
         super().__init__(self._dst_key)
-
-    def deletions(self, context):
-        """
-        Delete links to models that no longer exist
-        :param context: the master document
-        """
-        for doc in set(self._original) - set(self._results):
-            lhs = self._classB.table_name
-            rhs = self._classA.table_name
-            linkage = {lhs: doc.uuid, rhs: context.uuid}
-            item = self._table.seek_one(lhs, linkage)
-            if item and item[rhs] != linkage[rhs]: item = None
-            if not item: raise PyMambaForeignKeyViolation('link table item is missing')
-            self._table.delete(item['_id'])
 
     def from_internal(self, doc):
         """
@@ -360,22 +348,39 @@ class ManyToManyLink(BaseType):
         self._classB.append(doc.doc())
         self.add_link(doc, context)
 
+    def _lookup(self, context, doc):
+        """
+        Lookup an entry in the table linkage index
+        :param context: the master document
+        :param doc: the slave document
+        :return: the index item
+        """
+        a = self._classA.table_name
+        b = self._classB.table_name
+        return self._table.seek_one(a+b, {a: context.uuid, b: doc.uuid})
+
     def upd_dependent(self, doc, context):
         """
         Update a dependent record that has been changed
         :param doc: the document that has changed
         :param context: the master document
         """
-        lhs = self._classB.table_name
-        rhs = self._classA.table_name
-        if doc._dirty:
+        if doc.is_dirty():
             doc.validate()
             self._classB.save(doc.doc())
-            doc._dirty = False
-        linkage = {lhs: doc.uuid, rhs: context.uuid}
-        item = self._table.seek_one(lhs, linkage)
-        if item and item[rhs] != linkage[rhs]: item = None
+            doc.is_dirty(False)
+        item = self._lookup(context, doc)
         self.add_link(doc, context) if not item else None
+
+    def deletions(self, context):
+        """
+        Delete links to models that no longer exist
+        :param context: the master document
+        """
+        for doc in set(self._original) - set(self._results):
+            item = self._lookup(context, doc)
+            if not item: raise PyMambaForeignKeyViolation('link table item is missing')
+            self._table.delete(item['_id'])
 
 
 class PyMambaForeignKeyViolation(BaseException):

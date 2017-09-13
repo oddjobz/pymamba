@@ -91,6 +91,7 @@ class UnitTests(unittest.TestCase):
         doc = list(self._user_model.find())[0]
         self.assertEqual(doc.addresses[0].postcode, 'CFXX 1DE')
         self.assertEqual(doc.addresses[1].postcode, 'CFXX 1DF')
+        doc.addresses[0].postcode += '!'
 
     def test_03_update_address(self):
         self.generate_data_1()

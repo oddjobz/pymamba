@@ -1,3 +1,9 @@
+### Version 0.2.5
+
+* Couple of critical bug fixes in the new ORM code
+* Couple of related fixes to the addressbook demo
+* A little refactoring
+
 ### Version 0.2.4
 
 * Adding addressbook demo (nested relationships)
