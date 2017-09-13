@@ -45,7 +45,7 @@ from sys import _getframe, maxsize
 from bson.objectid import ObjectId
 from ujson_delta import diff
 
-__version__ = '0.2.3'
+__version__ = '0.2.4'
 
 def read_transaction(func):
     """
@@ -223,8 +223,9 @@ class Database(object):
         'map_async': True
     }
 
-    def __init__(self, name, conf=None, binlog=True):
+    def __init__(self, name, conf=None, binlog=True, size=None):
         conf = dict(self._conf, **conf.get('env', {})) if conf else self._conf
+        if size: conf['map_size'] = size
         self._tables = {}
         self._env = Environment(name, **conf)
         self._db = self._env.open_db()
@@ -1162,6 +1163,24 @@ def _index_name(self, name):
     :rtype: str
     """
     return '_{}_{}'.format(self._name, name)
+
+
+def size_mb(size):
+    """
+    Helper function when creating database
+    :param size: interger (size in Mb)
+    :return: integer (bytes)
+    """
+    return 1024*1024*size
+
+
+def size_gb(size):
+    """
+    Helper function when creating database
+    :param size: interger (size in Gb)
+    :return: integer (bytes)
+    """
+    return 1024*1024*1024*size
 
 
 class xTableExists(Exception):

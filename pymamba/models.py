@@ -123,12 +123,14 @@ class Table(object):
         doc = self._table.get(key)
         return BaseModel(doc, instance=self) if doc else None
 
-    def find(self):
+    #def find(self, index=None, expression=None, limit=maxsize, txn=None, abort=False):
+
+    def find(self, **kwargs):
         """
         Facilitate a sequential search of the database
         :return: the next record (as a Model)
         """
-        for doc in self._table.find():
+        for doc in self._table.find(**kwargs):
             yield BaseModel(doc, instance=self)
 
     def list(self, *uuids):
@@ -201,7 +203,8 @@ class Table(object):
                     elif doc.is_dirty():
                         link.upd_dependent(doc, context)
                 link.deletions(context)
-            link._results = None
+                doc._instance.update_links(doc)
+            link._results = []
 
     def save(self, doc):
         """
@@ -285,6 +288,7 @@ class DirtyList(list):
             obj = BaseModel(obj, instance=self._instance)
         super().append(obj)
         obj.__dict__['_dirty'] = True
+        return obj
 
 
 class ManyToManyLink(BaseType):
@@ -301,8 +305,9 @@ class ManyToManyLink(BaseType):
         self._classB = class_b
         self._src_key = self._classA.table_name
         self._dst_key = self._classB.table_name
-        self._results = None
-        self._original = None
+        self._results = []
+        self._original = []
+        self._uuid = None
         super().__init__(self._dst_key)
 
     def deletions(self, context):
@@ -315,6 +320,7 @@ class ManyToManyLink(BaseType):
             rhs = self._classA.table_name
             linkage = {lhs: doc.uuid, rhs: context.uuid}
             item = self._table.seek_one(lhs, linkage)
+            if item and item[rhs] != linkage[rhs]: item = None
             if not item: raise PyMambaForeignKeyViolation('link table item is missing')
             self._table.delete(item['_id'])
 
@@ -324,13 +330,14 @@ class ManyToManyLink(BaseType):
         :param doc: our current document
         :return: a list containing linked records
         """
-        if not self._results:
+        if not self._results or self._uuid != doc.get('_id'):
             self._results = DirtyList(self._classB)
             if '_id' in doc:
                 key = {self._src_key: doc['_id'].decode()}
                 for link in self._table.seek(self._src_key, key):
                     self._results.append(self._classB.get(link[self._dst_key].encode()))
                 self._original = self._results[:]
+                self._uuid = doc.get('_id')
         return self._results
 
     def add_link(self, doc, context):
@@ -367,6 +374,7 @@ class ManyToManyLink(BaseType):
             doc._dirty = False
         linkage = {lhs: doc.uuid, rhs: context.uuid}
         item = self._table.seek_one(lhs, linkage)
+        if item and item[rhs] != linkage[rhs]: item = None
         self.add_link(doc, context) if not item else None
 
 

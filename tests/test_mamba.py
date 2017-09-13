@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import unittest
-from pymamba import Database, Table, _debug, xIndexMissing, xWriteFail, xTableMissing
+from pymamba import Database, Table, _debug, xIndexMissing, xWriteFail, xTableMissing, size_mb, size_gb
 from subprocess import call
 
 
@@ -53,11 +53,11 @@ class UnitTests(unittest.TestCase):
         _debug(self, "We are here!")
 
     def test_01_open_database(self):
-        db = Database(self._db_name)
+        db = Database(self._db_name, size=size_mb(10))
         self.assertTrue(isinstance(db, Database))
 
     def test_02_create_table(self):
-        db = Database(self._db_name)
+        db = Database(self._db_name, size=size_gb(0.1))
         table = db.table(self._tb_name)
         self.assertTrue(isinstance(table, Table))
 

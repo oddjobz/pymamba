@@ -1,3 +1,8 @@
+### Version 0.2.4
+
+* Adding addressbook demo (nested relationships)
+* A number of related bugfixes
+
 ### Version 0.2
 
 * Complete restructure to allow for application level transactions (for replication)
