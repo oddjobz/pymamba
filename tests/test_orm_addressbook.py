@@ -204,6 +204,7 @@ class UnitTests(unittest.TestCase):
                           for business in person.business
                           for book in business.address_book
         ]))
+        books.sort()
         self.assertEqual(books, ['Business', 'Personal'])
 
     def test_07_crosspatch_book_person(self):
