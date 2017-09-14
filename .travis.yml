@@ -4,7 +4,7 @@ python:
 install:
 - pip install -r requirements-test.txt
 script:
-- py.test --cov-report term-missing --cov-config=.coveragerc --cov=pymamba/
+- echo `pwd` && PYTHONPATH="`pwd`:$PYTHONPATH" py.test --cov-report term-missing --cov-config=.coveragerc --cov=pymamba/
 after_success:
 - bash <(curl -s https://codecov.io/bash)
 notifications:
