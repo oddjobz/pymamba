@@ -31,6 +31,8 @@ So, what we're catering for at the moment;
 *We do have a little work left to do as you can see, but the heart of the ORM is up and
 running and seem to work fairly well*.
 
+There's a blog posting with more detail here. <[Article on ORM for NoSQL](https://gareth.bult.co.uk/2017/09/14/orm_for_nosql/)>.
+
 #### How to Use Models
 
 The idea is that we wrap each table up in a dedicated class then we can create additional
