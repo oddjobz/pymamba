@@ -1,7 +1,5 @@
 from pymamba import Database, size_mb
 from pymamba.models import ManyToMany, Table
-from pymamba.types import AgeType, DateType
-import datetime
 
 
 class AddressBookModel(Table):

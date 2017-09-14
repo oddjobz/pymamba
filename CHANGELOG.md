@@ -1,3 +1,8 @@
+### Version 0.2.6
+
+* Additional unit testing (address_book)
+* some bug fixes in relation to address_book
+
 ### Version 0.2.5
 
 * Couple of critical bug fixes in the new ORM code

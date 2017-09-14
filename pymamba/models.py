@@ -14,6 +14,8 @@ class BaseModel(object):
         self.__dict__['_instance'] = instance
         self.__dict__['_dirty'] = False
         self.__dict__['_doc'] = args[0] if len(args) else {}
+        self.__dict__['_map'] = {}
+        self.__dict__['_dif'] = {}
         self.__dict__['_calculated'] = instance.calculated
 
     def __getattr__(self, key):
@@ -22,8 +24,16 @@ class BaseModel(object):
         :param key: field name
         :return: calculated field value
         """
-        if key in self._calculated:
-            return self._calculated[key].from_internal(self.__dict__['_doc'])
+        if key in self.__dict__['_calculated']:
+            cls = self.__dict__['_calculated'][key]
+            if type(cls) in [ManyToManyLink]:
+                if key not in self.__dict__['_map']:
+                    val = cls.from_internal(self.__dict__['_doc'])
+                    self.__dict__['_map'][key] = val
+                    self.__dict__['_dif'][key] = val[:]
+                return self.__dict__['_map'][key]
+            else:
+                return cls.from_internal(self.__dict__['_doc'])
         return self.__dict__['_doc'].get(key, '')
 
     def __setattr__(self, key, value):
@@ -92,6 +102,12 @@ class BaseModel(object):
 
     def doc(self):
         return self._doc
+
+    def update_links(self):
+        """
+        Update links in associated objects
+        """
+        self._instance.update_links(self)
 
     @property
     def uuid(self):
@@ -195,15 +211,17 @@ class Table(object):
         :param context: the base we're updating against
         """
         for link in self._links:
-            if link._results:
-                for doc in link._results:
+            results = context.__dict__['_map'].get(link._dst_key)
+            diff = context.__dict__['_dif'].get(link._dst_key)
+            if results is not None:
+                for doc in results:
                     if doc.is_new():
                         link.add_dependent(doc, context)
                     elif doc.is_dirty():
                         link.upd_dependent(doc, context)
-                link.deletions(context)
-                doc._instance.update_links(doc)
-            link._results = []
+                    doc.update_links()
+                link.del_dependent(context, set(diff) - set(results))
+                context.__dict__['_dif'][link._dst_key] = results[:]
 
     def save(self, doc):
         """
@@ -307,9 +325,6 @@ class ManyToManyLink(BaseType):
         self._classB = class_b
         self._src_key = self._classA.table_name
         self._dst_key = self._classB.table_name
-        self._results = []
-        self._original = []
-        self._uuid = None
         super().__init__(self._dst_key)
 
     def from_internal(self, doc):
@@ -318,15 +333,12 @@ class ManyToManyLink(BaseType):
         :param doc: our current document
         :return: a list containing linked records
         """
-        if not self._results or self._uuid != doc.get('_id'):
-            self._results = DirtyList(self._classB)
-            if '_id' in doc:
-                key = {self._src_key: doc['_id'].decode()}
-                for link in self._table.seek(self._src_key, key):
-                    self._results.append(self._classB.get(link[self._dst_key].encode()))
-                self._original = self._results[:]
-                self._uuid = doc.get('_id')
-        return self._results
+        results = DirtyList(self._classB)
+        if '_id' in doc:
+            key = {self._src_key: doc['_id'].decode()}
+            for link in self._table.seek(self._src_key, key):
+                results.append(self._classB.get(link[self._dst_key].encode()))
+        return results
 
     def add_link(self, doc, context):
         """
@@ -372,12 +384,12 @@ class ManyToManyLink(BaseType):
         item = self._lookup(context, doc)
         self.add_link(doc, context) if not item else None
 
-    def deletions(self, context):
+    def del_dependent(self, context, docs):
         """
         Delete links to models that no longer exist
         :param context: the master document
         """
-        for doc in set(self._original) - set(self._results):
+        for doc in docs:
             item = self._lookup(context, doc)
             if not item: raise PyMambaForeignKeyViolation('link table item is missing')
             self._table.delete(item['_id'])
