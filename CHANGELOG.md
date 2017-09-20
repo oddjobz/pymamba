@@ -1,3 +1,7 @@
+### Version 0.2.7
+
+* Changed requirements, replaced pymongo with bson
+
 ### Version 0.2.6
 
 * Additional unit testing (address_book)
