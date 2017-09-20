@@ -45,7 +45,7 @@ from sys import _getframe, maxsize
 from bson.objectid import ObjectId
 from ujson_delta import diff
 
-__version__ = '0.2.8'
+__version__ = '0.2.9'
 
 def read_transaction(func):
     """

@@ -1,6 +1,6 @@
 from setuptools import setup
 from os import path
-__version__ = '0.2.8'
+__version__ = '0.2.9'
 
 here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:

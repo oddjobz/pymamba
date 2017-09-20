@@ -4,8 +4,8 @@ PyMamba
 .. image:: https://travis-ci.org/oddjobz/pymamba.svg?branch=master
     :target: https://travis-ci.org/oddjobz/pymamba
 
-.. image:: https://coveralls.io/repos/github/oddjobz/pymamba/badge.svg?branch=master
-    :target: https://coveralls.io/github/oddjobz/pymamba?branch=master
+.. image:: https://codecov.io/gh/oddjobz/pymamba/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/oddjobz/pymamba
 
 PyMamba is a Python library designed to turn the LMDB storage engine into a relatively complete 
 Database package for use in Python3 applications. In the spirit of the language title, this 

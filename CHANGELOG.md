@@ -1,3 +1,7 @@
+### Version 0.2.9
+
+* Updating README.rst
+
 ### Version 0.2.8
 
 * Changed requirements, backed out of previous change
