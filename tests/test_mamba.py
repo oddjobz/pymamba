@@ -104,6 +104,20 @@ class UnitTests(unittest.TestCase):
         table.delete(doc)
         self.assertEqual(table.records, len(self._data)-1)
 
+    def test_08_delete_binlog(self):
+        db = Database(self._db_name)
+        db.binlog(True)
+        self.generate_data(db, self._tb_name)
+        self.assertEqual(db.tables_all, ['__binlog__', '__metadata__', 'demo1'])
+        db.close()
+
+        db = Database(self._db_name)
+        db.drop(self._tb_name)
+        db.drop('__binlog__')
+        self.assertEqual(db.tables_all, ['__metadata__'])
+        with self.assertRaises(xTableMissing):
+            db.drop('fred')
+
     def test_09_create_drop_index(self):
         db = Database(self._db_name)
         table = db.table(self._tb_name)
@@ -612,14 +626,14 @@ class UnitTests(unittest.TestCase):
             doc = docs[0]
             self.assertEqual(doc['age'], 3001)
             all = db.tables_all
-            cmp = ['__binlog__','@_demo1_by_name', '_demo1_by_name', 'demo1']
+            cmp = ['__binlog__','__metadata__', '_demo1_by_name', 'demo1']
             all.sort()
             cmp.sort()
             self.assertEqual(all, cmp)
             db.binlog(False)
             all = db.tables_all
             all.sort()
-            cmp = ['@_demo1_by_name', '_demo1_by_name', 'demo1']
+            cmp = ['__metadata__', '_demo1_by_name', 'demo1']
             cmp.sort()
             self.assertEqual(all, cmp)
             db.drop('demo1')
@@ -628,7 +642,7 @@ class UnitTests(unittest.TestCase):
             with db.begin():
                 raise Exception('catch this')
 
-        self.assertEqual(db.tables_all, [])
+        self.assertEqual(db.tables_all, ['__metadata__'])
         db.binlog(False)
         db.sync(True)
 

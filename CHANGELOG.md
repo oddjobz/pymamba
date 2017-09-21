@@ -1,3 +1,12 @@
+### Version 0.3.0
+
+* Fixed bug in 'drop' that prevented access to system tables
+* Added more unit testing for 'drop'
+* Restructured how calculated values are stored. Putting them in the root
+  folder with table definitions was causing problems for mdb_copy so they now
+  reside in their own folder called __metadata__. Pre-existing items will be
+  transparently migrated on startup.
+
 ### Version 0.2.9
 
 * Updating README.rst

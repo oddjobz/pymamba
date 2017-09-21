@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from mamba import Database
+from pymamba import Database
 #
 print(">> Define some arbitrary data")
 data = [
@@ -38,5 +38,5 @@ print('>> Scanning on name index with filter')
 for record in table.find('by_name', expression=lambda doc: doc['age'] > 40):
     print('{name} is {age} years old (filtered age>40)'.format(**record))
 
-table.drop(True)
+db.drop('people')
 db.close()

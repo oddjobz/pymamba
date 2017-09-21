@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-
 from pymamba import Database
 from time import time
 from random import random
@@ -39,7 +37,7 @@ print('')
 
 call(['rm', '-rf', 'databases/perfDB'])
 print("* No Indecies")
-db = Database('databases/ls scperfDB')
+db = Database('databases/perfDB')
 table = db.table('sessions')
 chunk(db,table, 0, 5000)
 chunk(db,table, 5000, 5000)

@@ -45,7 +45,8 @@ from sys import _getframe, maxsize
 from bson.objectid import ObjectId
 from ujson_delta import diff
 
-__version__ = '0.2.9'
+__version__ = '0.3.0'
+
 
 def read_transaction(func):
     """
@@ -61,6 +62,7 @@ def read_transaction(func):
         kwargs['abort'] = True
         return func(*args, **kwargs)
     return wrapped_f
+
 
 def write_transaction(func):
     """
@@ -234,9 +236,31 @@ class Database(object):
             self._binlog = self.env.open_db('__binlog__'.encode(), create=binlog)
         except NotFoundError:
             self._binlog = None
+        try:
+            self._metadata = self.env.open_db('__metadata__'.encode(), create=False)
+        except NotFoundError:
+            self.migrate_metadata()
 
     def __del__(self):
         self.close()
+
+    def migrate_metadata(self):
+        self._metadata = self.env.open_db('__metadata__'.encode(), create=True)
+        with self.env.begin(write=True) as txn:
+            with Cursor(self._db, txn) as cursor:
+                move_next = cursor.first
+                while move_next():
+                    move_next = cursor.next
+                    name = cursor.key().decode()
+                    if name[0] == '@':
+                        record = txn.get(cursor.key(), db=self._db)
+                        if not txn.put(name[1:].encode(), record, db=self._metadata):
+                            txn.abort()
+                            print("Failed to create new record")
+                            return
+                        if not txn.delete(cursor.key(), db=self._db):
+                            print("Failed to delete old record")
+                            return
 
     @property
     def env(self):
@@ -342,7 +366,7 @@ class Database(object):
                 if cursor.first():
                     while True:
                         name = cursor.key().decode()
-                        if all or name[0] not in ['_', '@', '~']:
+                        if all or name[0] not in ['_', '~']:
                             result.append(name)
                         if not cursor.next():
                             break
@@ -358,12 +382,15 @@ class Database(object):
         :param name: Name of table to drop
         :type name: str
         """
-        if name in self._tables:
-            if name in self.tables:
-                self._tables[name]._drop()
-            del self._tables[name]
-        else:
+        if name not in self.tables_all:
             raise xTableMissing
+
+        if name not in self._tables:
+            table = self.table(name)
+
+        if name in self._tables:
+            self._tables[name]._drop()
+        del self._tables[name]
 
     def restructure(self, name):
         """
@@ -423,8 +450,8 @@ class Table(object):
     def _open_(self, txn):
         self._db = self._ctx.env.open_db(self._name.encode(), txn=txn)
         for index in self.indexes:
-            key = ''.join(['@', _index_name(self, index)]).encode()
-            doc = loads(bytes(txn.get(key)))
+            key = _index_name(self, index).encode()
+            doc = loads(bytes(txn.get(key, db=self._ctx._metadata)))
             self._indexes[index] = Index(self._ctx, index, doc['func'], doc['conf'], txn)
 
     @write_transaction
@@ -703,9 +730,9 @@ class Table(object):
                 'create': True,
             }
             self._indexes[name] = Index(self._ctx, name, func, conf, txn)
-            key = ''.join(['@', _index_name(self, name)]).encode()
+            key = _index_name(self, name).encode()
             val = dumps({'conf': conf, 'func': func}).encode()
-            if not txn.put(key, val): raise xWriteFail
+            if not txn.put(key, val, db=self._ctx._metadata): raise xWriteFail
             self._reindex(name, txn)
 
             if self._ctx.transaction:
@@ -877,7 +904,7 @@ class Table(object):
         if name not in self._indexes: raise xIndexMissing
         self._indexes[name].drop(txn)
         del self._indexes[name]
-        if not txn.delete(''.join(['@', _index_name(self, name)]).encode()): raise xWriteFail
+        if not txn.delete(_index_name(self, name).encode(), db=self._ctx._metadata): raise xWriteFail
 
         if self._ctx.transaction:
             self._ctx.transaction.unindex(self._name, name)
