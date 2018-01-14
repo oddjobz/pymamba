@@ -1,3 +1,7 @@
+# This package has now been obsoleted in favour of Pynndb
+
+Pynndb is built on the same base as Pymamba, and is mostly compatible, but contains numerous bugfixes and is where ongoing development will happen. https://github.com/oddjobz/pynndb
+
 # PyMamba
 
 [![Build Status](https://travis-ci.org/oddjobz/pymamba.svg?branch=master&v=17)](https://travis-ci.org/oddjobz/pymamba)
